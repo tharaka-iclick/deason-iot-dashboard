@@ -1,0 +1,74 @@
+.device-management {
+  max-width: 1200px;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2rem;
+}
+
+.page-header h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.devices-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+.device-card {
+  padding: 1.5rem;
+}
+
+.device-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.device-header h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.status-icon {
+  flex-shrink: 0;
+}
+
+.status-icon.online {
+  color: #16a34a;
+}
+
+.status-icon.offline {
+  color: #dc2626;
+}
+
+.device-type {
+  color: #6b7280;
+  font-size: 0.875rem;
+  margin-bottom: 0.5rem;
+}
+
+.device-location {
+  color: #6b7280;
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+}
+
+.device-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.device-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
