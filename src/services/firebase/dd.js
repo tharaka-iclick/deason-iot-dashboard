@@ -12,7 +12,7 @@ function DeviceDashboard() {
   const [selectedDevice, setSelectedDevice] = useState(null);
   const [deviceData, setDeviceData] = useState(null);
 
-  // Listen for EUIs
+
   useEffect(() => {
     const unsubscribe = listenForDeviceEUIs((euis) => {
       setDeviceEUIs(euis);
@@ -20,7 +20,7 @@ function DeviceDashboard() {
     return () => unsubscribe();
   }, []);
 
-  // Listen for device IDs when EUI is selected
+
   useEffect(() => {
     if (selectedEUI) {
       const unsubscribe = listenForDeviceIDs(selectedEUI, (ids) => {
@@ -30,7 +30,7 @@ function DeviceDashboard() {
     }
   }, [selectedEUI]);
 
-  // Listen for device data when device is selected
+ 
   useEffect(() => {
     if (selectedEUI && selectedDevice) {
       const unsubscribe = listenForDeviceData(
