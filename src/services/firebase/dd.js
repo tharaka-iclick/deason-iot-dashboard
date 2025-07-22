@@ -1,5 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { getAllDeviceEUIs, getDeviceIDsByEUI, getDeviceData } from './dataService';
+import { 
+  listenForDeviceEUIs, 
+  listenForDeviceIDs, 
+  listenForDeviceData 
+} from './dataService';
 
 function DeviceDashboard() {
   const [deviceEUIs, setDeviceEUIs] = useState([]);
@@ -8,52 +12,41 @@ function DeviceDashboard() {
   const [selectedDevice, setSelectedDevice] = useState(null);
   const [deviceData, setDeviceData] = useState(null);
 
-  // Load all device EUIs on component mount
+  // Listen for EUIs
   useEffect(() => {
-    const loadEUIs = async () => {
-      try {
-        const euis = await getAllDeviceEUIs();
-        setDeviceEUIs(euis);
-      } catch (error) {
-        console.error("Failed to load EUIs:", error);
-      }
-    };
-    loadEUIs();
+    const unsubscribe = listenForDeviceEUIs((euis) => {
+      setDeviceEUIs(euis);
+    });
+    return () => unsubscribe();
   }, []);
 
-  // Load device IDs when EUI is selected
+  // Listen for device IDs when EUI is selected
   useEffect(() => {
     if (selectedEUI) {
-      const loadDeviceIDs = async () => {
-        try {
-          const ids = await getDeviceIDsByEUI(selectedEUI);
-          setDeviceIDs(ids);
-        } catch (error) {
-          console.error("Failed to load device IDs:", error);
-        }
-      };
-      loadDeviceIDs();
+      const unsubscribe = listenForDeviceIDs(selectedEUI, (ids) => {
+        setDeviceIDs(ids);
+      });
+      return () => unsubscribe();
     }
   }, [selectedEUI]);
 
-  // Load device data when device is selected
+  // Listen for device data when device is selected
   useEffect(() => {
     if (selectedEUI && selectedDevice) {
-      const loadData = async () => {
-        try {
-          const data = await getDeviceData(selectedEUI, selectedDevice);
+      const unsubscribe = listenForDeviceData(
+        selectedEUI, 
+        selectedDevice, 
+        (data) => {
           setDeviceData(data);
-        } catch (error) {
-          console.error("Failed to load device data:", error);
         }
-      };
-      loadData();
+      );
+      return () => unsubscribe();
     }
   }, [selectedEUI, selectedDevice]);
 
   return (
     <div>
-      <h2>Device Dashboard</h2>
+      <h2>Real-Time Device Dashboard</h2>
       
       <div>
         <label>Select Device EUI:</label>
@@ -85,7 +78,7 @@ function DeviceDashboard() {
 
       {deviceData && (
         <div>
-          <h3>Device Data</h3>
+          <h3>Device Data (Live Updates)</h3>
           <pre>{JSON.stringify(deviceData, null, 2)}</pre>
         </div>
       )}
