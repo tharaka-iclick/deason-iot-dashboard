@@ -10,6 +10,7 @@ import { DeviceManagement } from "./features/devices/pages/DeviceManagement";
 import { Profile } from "./features/profile/pages/Profile";
 import { Layout } from "./shared/components/layout/Layout";
 import { ProtectedRoute } from "./app/router/ProtectedRoute";
+import DashboardsEditCanvas from "./features/dashboard/EditCanvas/pages/DashboardsEditCanvas";
 import { Spinner } from "./shared/components/ui/Spinner";
 
 function App() {
@@ -48,6 +49,14 @@ function App() {
       <Route
         path="/login"
         element={user ? <Navigate to="/dashboard" replace /> : <Login />}
+      />
+      <Route
+        path="/dashboard/edit"
+        element={
+          <ProtectedRoute>
+            <DashboardsEditCanvas />
+          </ProtectedRoute>
+        }
       />
       <Route
         path="/"

@@ -1,16 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
 import { Activity, Thermometer, Droplets, Zap } from "lucide-react";
-import { Card } from "../../../shared/components/ui/Card";
 import { updateMetrics, updateSensorData } from "../store/dashboardSlice";
 import {
   Box,
@@ -33,6 +23,7 @@ import {
 import EditIcon from "@mui/icons-material/Edit";
 import DownloadIcon from "@mui/icons-material/Download";
 import AddIcon from "@mui/icons-material/Add";
+import { useNavigate } from "react-router-dom";
 
 // import "./Dashboard.css";
 
@@ -99,6 +90,7 @@ export const Dashboard = () => {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const navigate = useNavigate();
 
   const handleSearchChange = (event) => {
     setSearch(event.target.value);
@@ -170,6 +162,10 @@ export const Dashboard = () => {
     { icon: Zap, label: "Alerts", value: metrics.alerts, color: "orange" },
   ];
 
+  const handleAddClick = () => {
+    navigate("/dashboard/edit"); // your route
+  };
+
   return (
     <div className="dashboard">
       <Box>
@@ -199,7 +195,11 @@ export const Dashboard = () => {
                 value={search}
                 onChange={handleSearchChange}
               />
-              <Button variant="contained" startIcon={<AddIcon />}>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={handleAddClick}
+              >
                 Add
               </Button>
             </Stack>
