@@ -289,6 +289,8 @@ const DashboardEditor = () => {
   const paperRef = useRef(null);
   const stencilRef = useRef(null);
   const portIdCounterRef = useRef(1);
+  const inspectorContainerRef = useRef(null);
+  const inspectorInstanceRef = useRef(null);
 
   const commandManagerRef = useRef(null);
   const [currentFileName, setCurrentFileName] = useState("Untitled.joint*");
@@ -477,6 +479,7 @@ const DashboardEditor = () => {
         );
       }
     });
+
     const paper = new dia.Paper({
       model: graph,
       cellViewNamespace: shapes,
@@ -577,7 +580,7 @@ const DashboardEditor = () => {
         new dia.ToolsView({
           tools: [
             new joint.elementTools.Boundary({
-              padding: 1,
+              padding: 10,
               useModelGeometry: true,
               attributes: {
                 fill: "#4a7bcb",
@@ -612,7 +615,12 @@ const DashboardEditor = () => {
           new joint.linkTools.Vertices({ vertexAdding: true }),
           new joint.linkTools.SourceAnchor(),
           new joint.linkTools.TargetAnchor(),
-          new joint.linkTools.Remove(),
+          new joint.linkTools.Remove({
+            action: (evt) => {
+              console.log("Removing link:", linkView.model.id);
+              linkView.model.remove();
+            },
+          }),
         ],
       });
 
@@ -648,16 +656,6 @@ const DashboardEditor = () => {
       halo.removeHandle("rotate");
 
       halo.render();
-
-      const freeTransform = new ui.FreeTransform({
-        graph,
-        paper,
-        cell: cellView.model,
-        padding: 9,
-        useBordersToResize: true,
-        rotate: true, // ➕ Enable rotation on pointerup
-      });
-      freeTransform.render();
     });
 
     // Initialize Stencil
@@ -705,6 +703,209 @@ const DashboardEditor = () => {
     stencilContainerRef.current.appendChild(stencil.el);
     stencil.render();
 
+    const rect = new joint.shapes.standard.Rectangle({
+      position: { x: 100, y: 100 },
+      size: { width: 100, height: 50 },
+      attrs: {
+        body: { fill: "#ffffff", stroke: "#000000" },
+        label: { text: "My Rectangle", fill: "#000000" },
+      },
+      custom: {
+        description: "A sample rectangle",
+        color: "#ffffff",
+      },
+    });
+
+    graph.addCell(rect);
+
+    // paper.on("element:pointerclick", (elementView) => {
+    //   paper.removeTools();
+    //   const element = elementView.model;
+    //   if (element.get("uniqueKey") === "valve") {
+    //     const currentStatus = element.attr("state/status");
+    //     element.attr(
+    //       "state/status",
+    //       currentStatus === "open" ? "closed" : "open"
+    //     );
+    //     element.attr("label/text", `Valve (${element.attr("state/status")})`);
+    //     element.attr(
+    //       "body/fill",
+    //       currentStatus === "open" ? "#32CD32" : "#FF4500"
+    //     );
+    //   }
+    //   const toolsView = new dia.ToolsView({
+    //     tools: [
+    //       new joint.elementTools.Boundary({
+    //         padding: 10,
+    //         useModelGeometry: true,
+    //         attributes: {
+    //           fill: "#4a7bcb",
+    //           "fill-opacity": 0.1,
+    //           stroke: "#4a7bcb",
+    //           "stroke-width": 2,
+    //           "stroke-dasharray": "none",
+    //           "pointer-events": "none",
+    //           // rx: 2,
+    //           // ry: 2,
+    //         },
+    //       }),
+    //       // new joint.elementTools.Connect({
+    //       //   useModelGeometry: true,
+    //       //   x: "calc(w + 10)",
+    //       //   y: "calc(h / 2)",
+    //       // }),
+    //       new joint.elementTools.Remove({
+    //         useModelGeometry: true,
+    //         x: -10,
+    //         y: -10,
+    //       }),
+    //     ],
+    //   });
+    //   elementView.addTools(toolsView);
+    // });
+
+    paper.on("element:pointerclick", (elementView) => {
+      const cell = elementView.model;
+      if (inspectorInstanceRef.current) {
+        // inspectorInstanceRef.current.close();
+        inspectorInstanceRef.current.remove();
+      }
+
+      // Create Inspector
+      inspectorInstanceRef.current = joint.ui.Inspector.create(
+        inspectorContainerRef.current,
+        {
+          cell,
+          inputs: {
+            "attrs/label/text": {
+              type: "text",
+              label: "Label",
+              group: "text",
+            },
+            "attrs/body/fill": {
+              type: "color",
+              label: "Fill Color",
+              group: "appearance",
+            },
+            "custom/description": {
+              type: "text",
+              label: "Description",
+              group: "text",
+            },
+            "size/width": {
+              type: "number",
+              label: "Width",
+              min: 50,
+              max: 500,
+              group: "size",
+            },
+            "size/height": {
+              type: "number",
+              label: "Height",
+              min: 50,
+              max: 500,
+              group: "size",
+            },
+            "custom/type": {
+              type: "select",
+              label: "Type",
+              options: [
+                { value: "rectangle", content: "Rectangle" },
+                { value: "circle", content: "Circle" },
+                { value: "ellipse", content: "Ellipse" },
+              ],
+              group: "appearance",
+            },
+          },
+          groups: {
+            text: { label: "Text Properties", index: 1 },
+            appearance: { label: "Appearance", index: 2 },
+            size: { label: "Size", index: 3 },
+          },
+          groupState: {
+            text: { open: true },
+            appearance: { open: true },
+            size: { open: true },
+          },
+        }
+      );
+    });
+
+    const el = new shapes.standard.Rectangle({
+      position: { x: 40, y: 40 },
+      size: { width: 120, height: 60 },
+      furnitureType: "",
+      attrs: {
+        body: {
+          stroke: "#ed2637",
+          fill: "#ed2637",
+          fillOpacity: 0.2,
+        },
+        label: {
+          text: "Select furniture",
+          fontFamily: "sans-serif",
+        },
+      },
+    });
+
+    graph.addCells([el]);
+
+    if (inspectorContainerRef.current) {
+      ui.Inspector.create(inspectorContainerRef.current, {
+        cell: el,
+        inputs: {
+          furnitureType: {
+            label: "Furniture Type",
+            type: "select-box",
+            options: [
+              { value: "Chairs", content: "Chairs" },
+              { value: "Tables", content: "Tables" },
+              { value: "Drawers", content: "Drawers" },
+            ],
+            width: 150,
+          },
+          attrs: {
+            label: {
+              text: {
+                label: "Product",
+                type: "select-box",
+                width: 150,
+                options: {
+                  dependencies: ["furnitureType"],
+                  source: (data) => {
+                    const { value } = data.dependencies["furnitureType"];
+                    switch (value) {
+                      case "Chairs":
+                        return [
+                          { value: "Ostano", content: "Ostano" },
+                          { value: "Stig", content: "Stig" },
+                          { value: "Lidas", content: "Lidas" },
+                          { value: "Utter", content: "Utter" },
+                        ];
+                      case "Tables":
+                        return [
+                          { value: "Lack", content: "Lack" },
+                          { value: "Sandsberg", content: "Sandsberg" },
+                          { value: "Vilto", content: "Vilto" },
+                        ];
+                      case "Drawers":
+                        return [
+                          { value: "Vihals", content: "Vihals" },
+                          { value: "Malm", content: "Malm" },
+                          { value: "Kullen", content: "Kullen" },
+                        ];
+                      default:
+                        return [];
+                    }
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+    }
+
     // Define stencil elements and ports
     const stencilElements = [
       // {
@@ -733,17 +934,17 @@ const DashboardEditor = () => {
 
     const stencilPorts = [
       // Output Port (Rectangle)
-      {
-        type: "standard.Rectangle",
-        size: { width: 24, height: 24 },
-        attrs: { body: { fill: "#ff9580" } },
-        port: {
-          group: "out",
-          markup: util.svg`
-        <rect @selector="portBody" x="-12" y="-12" width="24" height="24" fill="#ff9580" stroke="#333333" stroke-width="2" magnet="active" port-group="out" />
-      `,
-        },
-      },
+      // {
+      //   type: "standard.Rectangle",
+      //   size: { width: 24, height: 24 },
+      //   attrs: { body: { fill: "#ff9580" } },
+      //   port: {
+      //     group: "out",
+      //     markup: util.svg`
+      //   <rect @selector="portBody" x="-12" y="-12" width="24" height="24" fill="#ff9580" stroke="#333333" stroke-width="2" magnet="active" port-group="out" />
+      // `,
+      //   },
+      // },
       // Output Port (Path)
       {
         type: "standard.Path",
@@ -962,29 +1163,29 @@ const DashboardEditor = () => {
         },
       },
       // Input Port (Circle)
-      {
-        type: "standard.Circle",
-        size: { width: 30, height: 30 },
-        attrs: { body: { fill: "#80aaff", stroke: "#333333" } },
-        port: {
-          group: "in",
-          markup: util.svg`
-        <circle @selector="portBody" r="15" fill="#80aaff" stroke="#333333" stroke-width="2" magnet="passive" port-group="in" />
-      `,
-        },
-      },
+      // {
+      //   type: "standard.Circle",
+      //   size: { width: 30, height: 30 },
+      //   attrs: { body: { fill: "#80aaff", stroke: "#333333" } },
+      //   port: {
+      //     group: "in",
+      //     markup: util.svg`
+      //   <circle @selector="portBody" r="15" fill="#80aaff" stroke="#333333" stroke-width="2" magnet="passive" port-group="in" />
+      // `,
+      //   },
+      // },
       // Output Port (Circle)
-      {
-        type: "standard.Circle",
-        size: { width: 30, height: 30 },
-        attrs: { body: { fill: "#ff9580", stroke: "#333333" } },
-        port: {
-          group: "out",
-          markup: util.svg`
-        <circle @selector="portBody" r="15" fill="#ff9580" stroke="#333333" stroke-width="2" magnet="active" port-group="out" />
-      `,
-        },
-      },
+      // {
+      //   type: "standard.Circle",
+      //   size: { width: 30, height: 30 },
+      //   attrs: { body: { fill: "#ff9580", stroke: "#333333" } },
+      //   port: {
+      //     group: "out",
+      //     markup: util.svg`
+      //   <circle @selector="portBody" r="15" fill="#ff9580" stroke="#333333" stroke-width="2" magnet="active" port-group="out" />
+      // `,
+      //   },
+      // },
       {
         type: "standard.Path",
         size: { width: 20, height: 20 },
@@ -1658,6 +1859,8 @@ const DashboardEditor = () => {
       return portId;
     };
 
+    // Create rectangle element
+
     // Port Move Tool
     const PortHandle = mvc.View.extend({
       tagName: "circle",
@@ -1939,7 +2142,7 @@ const DashboardEditor = () => {
         </Toolbar>
       </AppBar>
 
-      {/* Main Body: Canvas + Stencil */}
+      {/* Main Body: Stencil + Canvas + Inspector */}
       <Box sx={{ display: "flex", flex: 1, overflow: "hidden" }}>
         {/* Stencil Area */}
         <Box
@@ -2013,6 +2216,34 @@ const DashboardEditor = () => {
                 width: "100%",
                 height: "100%",
               },
+            }}
+          />
+        </Box>
+
+        {/* Inspector Area */}
+        <Box
+          sx={{
+            width: "250px",
+            borderLeft: "1px solid #ccc",
+            backgroundColor: "#fff",
+            overflow: "hidden",
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          <Typography
+            variant="subtitle1"
+            sx={{ p: 2, borderBottom: "1px solid #eee" }}
+          >
+            Inspector
+          </Typography>
+          <Box
+            ref={inspectorContainerRef}
+            sx={{
+              flex: 1,
+              overflow: "auto",
+              padding: "10px",
+              background: "#f5f5f5",
             }}
           />
         </Box>
