@@ -18,6 +18,11 @@ import {
 import * as joint from "@joint/plus";
 import MotorPumpSVG from "../../../WidgetSVG/MotorPumpSVG";
 import HeatPumpSVG from "../../../WidgetSVG/HeatPumpSVG";
+import {
+  listenForDeviceEUIs,
+  listenForDeviceIDs,
+  listenForDeviceData,
+} from "../../../../../src/services/firebase/dataService";
 
 class TemplateImage extends joint.dia.Element {
   defaults() {
@@ -298,6 +303,12 @@ const DashboardEditor = () => {
   const [currentCmdId, setCurrentCmdId] = useState(null);
   const [anchorEl, setAnchorEl] = useState(null);
 
+  const [deviceEUIs, setDeviceEUIs] = useState([]);
+  const [selectedEUI, setSelectedEUI] = useState(null);
+  const [deviceIDs, setDeviceIDs] = useState([]);
+  const [selectedDevice, setSelectedDevice] = useState(null);
+  const [deviceData, setDeviceData] = useState(null);
+
   const logsContainerRef = useRef(null);
   const lastViewRef = useRef(null);
   const timerRef = useRef(null);
@@ -448,6 +459,37 @@ const DashboardEditor = () => {
 
   joint.shapes.custom = joint.shapes.custom || {};
   joint.shapes.custom.TemplateImage = TemplateImage;
+
+  useEffect(() => {
+    const unsubscribe = listenForDeviceEUIs((euis) => {
+      setDeviceEUIs(Array.isArray(euis) ? euis : []);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (selectedEUI) {
+      const unsubscribe = listenForDeviceIDs(selectedEUI, (ids) => {
+        setDeviceIDs(Array.isArray(ids) ? ids : []);
+      });
+      return () => unsubscribe();
+    } else {
+      setDeviceIDs([]); // Clear deviceIDs if no EUI is selected
+    }
+  }, [selectedEUI]);
+
+  useEffect(() => {
+    if (selectedEUI && selectedDevice) {
+      const unsubscribe = listenForDeviceData(
+        selectedEUI,
+        selectedDevice,
+        (data) => {
+          setDeviceData(data);
+        }
+      );
+      return () => unsubscribe();
+    }
+  }, [selectedEUI, selectedDevice]);
 
   useEffect(() => {
     const { dia, shapes, mvc, ui, highlighters, util } = joint;
@@ -767,7 +809,6 @@ const DashboardEditor = () => {
     paper.on("element:pointerclick", (elementView) => {
       const cell = elementView.model;
       if (inspectorInstanceRef.current) {
-        // inspectorInstanceRef.current.close();
         inspectorInstanceRef.current.remove();
       }
 
@@ -816,20 +857,125 @@ const DashboardEditor = () => {
               ],
               group: "appearance",
             },
+            "custom/deviceEUI": {
+              type: "select",
+              label: "Device EUI",
+              options: (deviceEUIs || []).map((eui) => ({
+                value: eui,
+                content: eui,
+              })),
+              defaultValue: selectedEUI || "",
+              events: {
+                change: (value) => {
+                  setSelectedEUI(value);
+                  cell.prop("custom/deviceEUI", value);
+                },
+              },
+              group: "device",
+              disabled: !deviceEUIs || deviceEUIs.length === 0, // Disable if no EUIs available
+            },
+            "custom/deviceID": {
+              type: "select",
+              label: "Device ID",
+              options: (deviceIDs || []).map((id) => ({
+                value: id,
+                content: id,
+              })),
+              defaultValue: selectedDevice || "",
+              events: {
+                change: (value) => {
+                  setSelectedDevice(value);
+                  cell.prop("custom/deviceID", value);
+                },
+              },
+              group: "device",
+              disabled: !deviceIDs || deviceIDs.length === 0 || !selectedEUI, // Disable if no IDs or no EUI selected
+            },
           },
           groups: {
             text: { label: "Text Properties", index: 1 },
             appearance: { label: "Appearance", index: 2 },
             size: { label: "Size", index: 3 },
+            device: { label: "Device Settings", index: 4 },
+            actions: { label: "Actions", index: 5 },
           },
           groupState: {
             text: { open: true },
             appearance: { open: true },
             size: { open: true },
+            device: { open: true },
+            actions: { open: true },
           },
         }
       );
     });
+
+    // paper.on("element:pointerclick", (elementView) => {
+    //   const cell = elementView.model;
+    //   if (inspectorInstanceRef.current) {
+    //     // inspectorInstanceRef.current.close();
+    //     inspectorInstanceRef.current.remove();
+    //   }
+
+    //   // Create Inspector
+    //   inspectorInstanceRef.current = joint.ui.Inspector.create(
+    //     inspectorContainerRef.current,
+    //     {
+    //       cell,
+    //       inputs: {
+    //         "attrs/label/text": {
+    //           type: "text",
+    //           label: "Label",
+    //           group: "text",
+    //         },
+    //         "attrs/body/fill": {
+    //           type: "color",
+    //           label: "Fill Color",
+    //           group: "appearance",
+    //         },
+    //         "custom/description": {
+    //           type: "text",
+    //           label: "Description",
+    //           group: "text",
+    //         },
+    //         "size/width": {
+    //           type: "number",
+    //           label: "Width",
+    //           min: 50,
+    //           max: 500,
+    //           group: "size",
+    //         },
+    //         "size/height": {
+    //           type: "number",
+    //           label: "Height",
+    //           min: 50,
+    //           max: 500,
+    //           group: "size",
+    //         },
+    //         "custom/type": {
+    //           type: "select",
+    //           label: "Type",
+    //           options: [
+    //             { value: "rectangle", content: "Rectangle" },
+    //             { value: "circle", content: "Circle" },
+    //             { value: "ellipse", content: "Ellipse" },
+    //           ],
+    //           group: "appearance",
+    //         },
+    //       },
+    //       groups: {
+    //         text: { label: "Text Properties", index: 1 },
+    //         appearance: { label: "Appearance", index: 2 },
+    //         size: { label: "Size", index: 3 },
+    //       },
+    //       groupState: {
+    //         text: { open: true },
+    //         appearance: { open: true },
+    //         size: { open: true },
+    //       },
+    //     }
+    //   );
+    // });
 
     const el = new shapes.standard.Rectangle({
       position: { x: 40, y: 40 },
@@ -850,61 +996,61 @@ const DashboardEditor = () => {
 
     graph.addCells([el]);
 
-    if (inspectorContainerRef.current) {
-      ui.Inspector.create(inspectorContainerRef.current, {
-        cell: el,
-        inputs: {
-          furnitureType: {
-            label: "Furniture Type",
-            type: "select-box",
-            options: [
-              { value: "Chairs", content: "Chairs" },
-              { value: "Tables", content: "Tables" },
-              { value: "Drawers", content: "Drawers" },
-            ],
-            width: 150,
-          },
-          attrs: {
-            label: {
-              text: {
-                label: "Product",
-                type: "select-box",
-                width: 150,
-                options: {
-                  dependencies: ["furnitureType"],
-                  source: (data) => {
-                    const { value } = data.dependencies["furnitureType"];
-                    switch (value) {
-                      case "Chairs":
-                        return [
-                          { value: "Ostano", content: "Ostano" },
-                          { value: "Stig", content: "Stig" },
-                          { value: "Lidas", content: "Lidas" },
-                          { value: "Utter", content: "Utter" },
-                        ];
-                      case "Tables":
-                        return [
-                          { value: "Lack", content: "Lack" },
-                          { value: "Sandsberg", content: "Sandsberg" },
-                          { value: "Vilto", content: "Vilto" },
-                        ];
-                      case "Drawers":
-                        return [
-                          { value: "Vihals", content: "Vihals" },
-                          { value: "Malm", content: "Malm" },
-                          { value: "Kullen", content: "Kullen" },
-                        ];
-                      default:
-                        return [];
-                    }
-                  },
-                },
-              },
-            },
-          },
-        },
-      });
-    }
+    // if (inspectorContainerRef.current) {
+    //   ui.Inspector.create(inspectorContainerRef.current, {
+    //     cell: el,
+    //     inputs: {
+    //       furnitureType: {
+    //         label: "Furniture Type",
+    //         type: "select-box",
+    //         options: [
+    //           { value: "Chairs", content: "Chairs" },
+    //           { value: "Tables", content: "Tables" },
+    //           { value: "Drawers", content: "Drawers" },
+    //         ],
+    //         width: 150,
+    //       },
+    //       attrs: {
+    //         label: {
+    //           text: {
+    //             label: "Product",
+    //             type: "select-box",
+    //             width: 150,
+    //             options: {
+    //               dependencies: ["furnitureType"],
+    //               source: (data) => {
+    //                 const { value } = data.dependencies["furnitureType"];
+    //                 switch (value) {
+    //                   case "Chairs":
+    //                     return [
+    //                       { value: "Ostano", content: "Ostano" },
+    //                       { value: "Stig", content: "Stig" },
+    //                       { value: "Lidas", content: "Lidas" },
+    //                       { value: "Utter", content: "Utter" },
+    //                     ];
+    //                   case "Tables":
+    //                     return [
+    //                       { value: "Lack", content: "Lack" },
+    //                       { value: "Sandsberg", content: "Sandsberg" },
+    //                       { value: "Vilto", content: "Vilto" },
+    //                     ];
+    //                   case "Drawers":
+    //                     return [
+    //                       { value: "Vihals", content: "Vihals" },
+    //                       { value: "Malm", content: "Malm" },
+    //                       { value: "Kullen", content: "Kullen" },
+    //                     ];
+    //                   default:
+    //                     return [];
+    //                 }
+    //               },
+    //             },
+    //           },
+    //         },
+    //       },
+    //     },
+    //   });
+    // }
 
     // Define stencil elements and ports
     const stencilElements = [

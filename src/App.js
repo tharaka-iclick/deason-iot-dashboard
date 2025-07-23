@@ -12,6 +12,7 @@ import { Layout } from "./shared/components/layout/Layout";
 import { ProtectedRoute } from "./app/router/ProtectedRoute";
 import DashboardsEditCanvas from "./features/dashboard/EditCanvas/pages/DashboardsEditCanvas";
 import { Spinner } from "./shared/components/ui/Spinner";
+import DeviceDashboard from "./services/firebase/dd";
 
 function App() {
   const dispatch = useDispatch();
@@ -68,7 +69,7 @@ function App() {
       >
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<Dashboard />} />
-        <Route path="devices" element={<DeviceManagement />} />
+        <Route path="devices" element={<DeviceDashboard />} />
         <Route path="profile" element={<Profile />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
