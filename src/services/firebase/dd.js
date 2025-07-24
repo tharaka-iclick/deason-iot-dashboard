@@ -1,89 +1,114 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
-  listenForDeviceEUIs, 
-  listenForDeviceIDs, 
-  listenForDeviceData 
+  listenForDeviceModels,
+  listenForDevices,
+  listenForDevicePayload 
 } from './dataService';
 
-function DeviceDashboard() {
-  const [deviceEUIs, setDeviceEUIs] = useState([]);
-  const [selectedEUI, setSelectedEUI] = useState(null);
-  const [deviceIDs, setDeviceIDs] = useState([]);
-  const [selectedDevice, setSelectedDevice] = useState(null);
-  const [deviceData, setDeviceData] = useState(null);
+const DeviceDataViewer = () => {
+  const [deviceModels, setDeviceModels] = useState({});
+  const [selectedModel, setSelectedModel] = useState('');
+  const [devices, setDevices] = useState({});
+  const [selectedDevice, setSelectedDevice] = useState('');
+  const [payload, setPayload] = useState({});
+  const [isLoading, setIsLoading] = useState(false);
 
-
+  // Load device models
   useEffect(() => {
-    const unsubscribe = listenForDeviceEUIs((euis) => {
-      setDeviceEUIs(euis);
-    });
+    const unsubscribe = listenForDeviceModels(setDeviceModels);
     return () => unsubscribe();
   }, []);
 
-
+  // Load devices when model is selected
   useEffect(() => {
-    if (selectedEUI) {
-      const unsubscribe = listenForDeviceIDs(selectedEUI, (ids) => {
-        setDeviceIDs(ids);
+    if (selectedModel) {
+      setIsLoading(true);
+      const unsubscribe = listenForDevices(selectedModel, (data) => {
+        setDevices(data);
+        setIsLoading(false);
       });
       return () => unsubscribe();
+    } else {
+      setDevices({});
+      setSelectedDevice('');
     }
-  }, [selectedEUI]);
+  }, [selectedModel]);
 
- 
+  // Load payload when device is selected
   useEffect(() => {
-    if (selectedEUI && selectedDevice) {
-      const unsubscribe = listenForDeviceData(
-        selectedEUI, 
+    if (selectedModel && selectedDevice) {
+      setIsLoading(true);
+      const unsubscribe = listenForDevicePayload(
+        selectedModel, 
         selectedDevice, 
         (data) => {
-          setDeviceData(data);
+          setPayload(data);
+          setIsLoading(false);
         }
       );
       return () => unsubscribe();
+    } else {
+      setPayload({});
     }
-  }, [selectedEUI, selectedDevice]);
+  }, [selectedModel, selectedDevice]);
 
   return (
     <div>
-      <h2>Real-Time Device Dashboard</h2>
+      <h2>Device Data Viewer</h2>
       
+      {/* Device Model Selection */}
       <div>
-        <label>Select Device EUI:</label>
+        <label>Select Device Model: </label>
         <select 
-          value={selectedEUI || ''} 
-          onChange={(e) => setSelectedEUI(e.target.value)}
+          value={selectedModel}
+          onChange={(e) => setSelectedModel(e.target.value)}
+          disabled={isLoading}
         >
-          <option value="">Select EUI</option>
-          {deviceEUIs.map(eui => (
-            <option key={eui} value={eui}>{eui}</option>
+          <option value="">-- Select a Device Model --</option>
+          {Object.entries(deviceModels).map(([eui, model]) => (
+            <option key={eui} value={eui}>
+              {model.name} ({eui})
+            </option>
           ))}
         </select>
       </div>
 
-      {selectedEUI && (
+      {/* Device Selection */}
+      {selectedModel && (
         <div>
-          <label>Select Device ID:</label>
+          <label>Select Device: </label>
           <select 
-            value={selectedDevice || ''} 
+            value={selectedDevice}
             onChange={(e) => setSelectedDevice(e.target.value)}
+            disabled={isLoading || !selectedModel}
           >
-            <option value="">Select Device</option>
-            {deviceIDs.map(id => (
-              <option key={id} value={id}>{id}</option>
+            <option value="">-- Select a Device --</option>
+            {Object.keys(devices).map((deviceId) => (
+              <option key={deviceId} value={deviceId}>
+                {deviceId}
+              </option>
             ))}
           </select>
         </div>
       )}
 
-      {deviceData && (
+      {/* Payload Display */}
+      {selectedDevice && (
         <div>
-          <h3>Device Data (Live Updates)</h3>
-          <pre>{JSON.stringify(deviceData, null, 2)}</pre>
+          <h3>Decoded Payload:</h3>
+          <textarea 
+            readOnly
+            rows="10"
+            cols="50"
+            value={JSON.stringify(payload, null, 2)}
+            style={{ fontFamily: 'monospace' }}
+          />
         </div>
       )}
+
+      {isLoading && <p>Loading data...</p>}
     </div>
   );
-}
+};
 
-export default DeviceDashboard;
+export default DeviceDataViewer;
