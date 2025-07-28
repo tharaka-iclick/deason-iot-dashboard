@@ -7,7 +7,7 @@ export class Pipe01 extends dia.Link {
   defaults() {
     return {
       ...super.defaults,
-      type: "Pipe",
+      type: "Pipe01",
       z: -1,
       router: { name: "rightAngle" },
       flow: 1,
