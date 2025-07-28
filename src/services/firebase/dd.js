@@ -11,7 +11,16 @@ const DeviceDataViewer = () => {
   const [devices, setDevices] = useState({});
   const [selectedDevice, setSelectedDevice] = useState('');
   const [payload, setPayload] = useState({});
+  const [selectedValue, setSelectedValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  // Convert snake_case to Title Case
+  const formatKey = (key) => {
+    return key
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  };
 
   // Load device models
   useEffect(() => {
@@ -44,6 +53,7 @@ const DeviceDataViewer = () => {
         (data) => {
           setPayload(data);
           setIsLoading(false);
+          setSelectedValue('');
         }
       );
       return () => unsubscribe();
@@ -51,6 +61,10 @@ const DeviceDataViewer = () => {
       setPayload({});
     }
   }, [selectedModel, selectedDevice]);
+
+  const handleRadioChange = (e) => {
+    setSelectedValue(e.target.value);
+  };
 
   return (
     <div>
@@ -92,16 +106,40 @@ const DeviceDataViewer = () => {
         </div>
       )}
 
-      {/* Payload Display */}
-      {selectedDevice && (
+      {/* Payload Radio Buttons */}
+      {selectedDevice && Object.keys(payload).length > 0 && (
         <div>
-          <h3>Decoded Payload:</h3>
-          <textarea 
+          <h3>Select a Value:</h3>
+          {Object.entries(payload).map(([key, value]) => {
+            const displayText = `${formatKey(key)}: ${value}`;
+            return (
+              <div key={key}>
+                <input
+                  type="radio"
+                  id={key}
+                  name="payloadValue"
+                  value={displayText}
+                  checked={selectedValue === displayText}
+                  onChange={handleRadioChange}
+                />
+                <label htmlFor={key}>
+                  {displayText}
+                </label>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Selected Value Display */}
+      {selectedValue && (
+        <div>
+          <h3>Selected Value:</h3>
+          <input
+            type="text"
+            value={selectedValue}
             readOnly
-            rows="10"
-            cols="50"
-            value={JSON.stringify(payload, null, 2)}
-            style={{ fontFamily: 'monospace' }}
+            style={{ width: '300px', padding: '5px' }}
           />
         </div>
       )}
