@@ -12,6 +12,9 @@ import {
   Select,
   FormControl,
   InputLabel,
+  RadioGroup,
+  FormControlLabel,
+  Radio,
 } from "@mui/material";
 import { ChevronDown, Undo, Redo } from "lucide-react";
 import {
@@ -23,9 +26,12 @@ import * as joint from "@joint/plus";
 import MotorPumpSVG from "../../../WidgetSVG/MotorPumpSVG";
 import HeatPumpSVG from "../../../WidgetSVG/HeatPumpSVG";
 import {
-  listenForDeviceEUIs,
-  listenForDeviceIDs,
-  listenForDeviceData,
+  // listenForDeviceEUIs,
+  // listenForDeviceIDs,
+  // listenForDeviceData,
+  listenForDeviceModels,
+  listenForDevices,
+  listenForDevicePayload,
 } from "../../../../../src/services/firebase/dataService";
 
 class TemplateImage extends joint.dia.Element {
@@ -314,6 +320,18 @@ const DashboardEditor = () => {
   const [deviceData, setDeviceData] = useState(null);
   const [updateKey, setUpdateKey] = useState(0);
   const [selectedCell, setSelectedCell] = useState(null);
+  const [deviceModels, setDeviceModels] = useState({});
+  const [devices, setDevices] = useState({});
+  const [selectedValue, setSelectedValue] = useState("");
+  const [availableValues, setAvailableValues] = useState([]);
+  const [payload, setPayload] = useState({});
+
+  const formatKey = (key) => {
+    return key
+      .split("_")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(" ");
+  };
 
   // Store device data subscriptions for each cell
   const deviceSubscriptions = useRef(new Map());
@@ -327,15 +345,37 @@ const DashboardEditor = () => {
   const updateCellDisplay = (cell, data) => {
     if (!cell || !data) return;
 
-    const temp = data?.decoded_payload?.temperature;
-    if (typeof temp !== "undefined") {
-      cell.attr("label/text", `Temp: ${temp} °C`);
-      cell.attr("body/fill", temp > 30 ? "#ffcccc" : "#ccffcc");
+    const payload = data || {};
+    const value = payload[selectedValue];
+
+    console.log("payload", value);
+
+    if (typeof value !== "undefined") {
+      // Update label with device model name if available
+      const modelName =
+        deviceModels[cell.prop("custom/deviceModel")]?.name || "Device";
+      cell.attr("label/text", `${modelName}: ${value}`);
+
+      // Customize appearance based on value type
+      if (typeof value === "number") {
+        // For numeric values, use color scale
+        const range = deviceModels[cell.prop("custom/deviceModel")]?.range || [
+          0, 100,
+        ];
+        const normalizedValue = Math.min(
+          Math.max((value - range[0]) / (range[1] - range[0]), 0),
+          1
+        );
+        const hue = (1 - normalizedValue) * 120; // Green (0) to Red (120)
+        cell.attr("body/fill", `hsl(${hue}, 100%, 80%)`);
+      } else {
+        // For non-numeric values, use a neutral color
+        cell.attr("body/fill", "#e0e0e0");
+      }
     }
   };
-
   // Function to subscribe a cell to device data
-  const subscribeCellToDevice = (cell, eui, deviceId) => {
+  const subscribeCellToDevice = (cell, eui, deviceId, deviceModel) => {
     const cellId = getCellId(cell);
 
     // Unsubscribe from previous device data if exists
@@ -346,9 +386,21 @@ const DashboardEditor = () => {
 
     if (eui && deviceId) {
       // Subscribe to new device data
-      const unsubscribe = listenForDeviceData(eui, deviceId, (data) => {
+      const unsubscribe = listenForDevicePayload(eui, deviceId, (data) => {
         console.log(`Device data for cell ${cellId}:`, data);
         cellDeviceData.current.set(cellId, data);
+        setPayload(data);
+
+        // Update available values from payload keys
+        const payloadKeys = Object.keys(data || {});
+        if (payloadKeys.length > 0) {
+          setAvailableValues(payloadKeys);
+          console.log("payloadKeys", payloadKeys);
+
+          if (!selectedValue || !payloadKeys.includes(selectedValue)) {
+            setSelectedValue(payloadKeys); // Set default to the first available value
+          }
+        }
         updateCellDisplay(cell, data);
       });
 
@@ -357,6 +409,7 @@ const DashboardEditor = () => {
       // Store device info in cell properties
       cell.prop("custom/deviceEUI", eui);
       cell.prop("custom/deviceID", deviceId);
+      cell.prop("custom/deviceModel", deviceModel);
     }
   };
 
@@ -370,9 +423,11 @@ const DashboardEditor = () => {
   };
 
   useEffect(() => {
-    const unsubscribe = listenForDeviceEUIs((euis) => {
-      console.log("Fetched EUIs:", euis);
-      setDeviceEUIs(euis);
+    const unsubscribe = listenForDeviceModels((models) => {
+      console.log("Fetched device models:", models);
+      setDeviceModels(models);
+      // console.log("Fetched EUIs:", euis);
+      // setDeviceEUIs(euis);
       // if (euis.length > 0 && !selectedEUI) {
       //   setSelectedEUI(euis[0]);
       // }
@@ -381,15 +436,36 @@ const DashboardEditor = () => {
   }, []);
 
   useEffect(() => {
+    const unsubscribe = listenForDeviceModels((devices) => {
+      const euis = Object.keys(devices);
+      console.log("Fetched EUIs:", euis);
+      setDeviceEUIs(euis);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // useEffect(() => {
+  //   if (selectedEUI) {
+  //     console.log("Fetching Device IDs for EUI:", selectedEUI);
+  //     const unsubscribe = listenForDeviceIDs(selectedEUI, (ids) => {
+  //       console.log("Fetched Device IDs:", ids);
+  //       setDeviceIDs(ids);
+  //     });
+  //     return () => unsubscribe();
+  //   } else {
+  //     setDeviceIDs([]);
+  //   }
+  // }, [selectedEUI]);
+  useEffect(() => {
     if (selectedEUI) {
-      console.log("Fetching Device IDs for EUI:", selectedEUI);
-      const unsubscribe = listenForDeviceIDs(selectedEUI, (ids) => {
-        console.log("Fetched Device IDs:", ids);
-        setDeviceIDs(ids);
+      console.log("Fetching Devices for EUI:", selectedEUI);
+      const unsubscribe = listenForDevices(selectedEUI, (devices) => {
+        console.log("Fetched Devices:", devices);
+        setDevices(devices);
       });
       return () => unsubscribe();
     } else {
-      setDeviceIDs([]);
+      setDevices({});
     }
   }, [selectedEUI]);
 
@@ -547,48 +623,48 @@ const DashboardEditor = () => {
   const [isLoadingEUIs, setIsLoadingEUIs] = useState(true);
   const [isLoadingDeviceIDs, setIsLoadingDeviceIDs] = useState(false);
 
-  useEffect(() => {
-    setIsLoadingEUIs(true);
-    const unsubscribe = listenForDeviceEUIs((euis) => {
-      console.log("Fetched EUIs:", euis);
-      setDeviceEUIs(euis);
-      setIsLoadingEUIs(false);
-      // if (euis.length > 0 && !selectedEUI) {
-      //   setSelectedEUI(euis[0]); // Set default EUI
-      // }
-    });
-    return () => unsubscribe();
-  }, []);
+  // useEffect(() => {
+  //   setIsLoadingEUIs(true);
+  //   const unsubscribe = listenForDeviceEUIs((euis) => {
+  //     console.log("Fetched EUIs:", euis);
+  //     setDeviceEUIs(euis);
+  //     setIsLoadingEUIs(false);
+  //     // if (euis.length > 0 && !selectedEUI) {
+  //     //   setSelectedEUI(euis[0]); // Set default EUI
+  //     // }
+  //   });
+  //   return () => unsubscribe();
+  // }, []);
 
-  useEffect(() => {
-    if (selectedEUI) {
-      setIsLoadingDeviceIDs(true);
-      console.log("Fetching Device IDs for EUI:", selectedEUI);
-      const unsubscribe = listenForDeviceIDs(selectedEUI, (ids) => {
-        console.log("Fetched Device IDs:", ids);
-        setDeviceIDs(ids);
-        setIsLoadingDeviceIDs(false);
-      });
-      return () => unsubscribe();
-    } else {
-      setDeviceIDs([]); // Clear deviceIDs if no EUI selected
-      setIsLoadingDeviceIDs(false);
-    }
-  }, [selectedEUI]);
+  // useEffect(() => {
+  //   if (selectedEUI) {
+  //     setIsLoadingDeviceIDs(true);
+  //     console.log("Fetching Device IDs for EUI:", selectedEUI);
+  //     const unsubscribe = listenForDeviceIDs(selectedEUI, (ids) => {
+  //       console.log("Fetched Device IDs:", ids);
+  //       setDeviceIDs(ids);
+  //       setIsLoadingDeviceIDs(false);
+  //     });
+  //     return () => unsubscribe();
+  //   } else {
+  //     setDeviceIDs([]); // Clear deviceIDs if no EUI selected
+  //     setIsLoadingDeviceIDs(false);
+  //   }
+  // }, [selectedEUI]);
 
-  useEffect(() => {
-    if (selectedEUI && selectedDevice) {
-      const unsubscribe = listenForDeviceData(
-        selectedEUI,
-        selectedDevice,
-        (data) => {
-          console.log("Fetched Device Data:", data);
-          setDeviceData(data);
-        }
-      );
-      return () => unsubscribe();
-    }
-  }, [selectedEUI, selectedDevice]);
+  // useEffect(() => {
+  //   if (selectedEUI && selectedDevice) {
+  //     const unsubscribe = listenForDeviceData(
+  //       selectedEUI,
+  //       selectedDevice,
+  //       (data) => {
+  //         console.log("Fetched Device Data:", data);
+  //         setDeviceData(data);
+  //       }
+  //     );
+  //     return () => unsubscribe();
+  //   }
+  // }, [selectedEUI, selectedDevice]);
 
   useEffect(
     () => {
@@ -709,6 +785,16 @@ const DashboardEditor = () => {
           inspectorInstanceRef.current.remove();
         }
         setSelectedCell(cell);
+
+        const cellEUI = cell.prop("custom/deviceEUI");
+        const cellDeviceID = cell.prop("custom/deviceID");
+
+        if (cellEUI) {
+          setSelectedEUI(cellEUI);
+          if (cellDeviceID) {
+            setSelectedDevice(cellDeviceID);
+          }
+        }
 
         console.log(
           "Rendering inspector with deviceEUIs:",
@@ -2034,7 +2120,7 @@ const DashboardEditor = () => {
             .resize(250, 250)
             .position(x, y + 230),
         ];
-        // graph.addCells(images);
+        graph.addCells(images);
         return images;
       }
 
@@ -2450,15 +2536,19 @@ const DashboardEditor = () => {
     ]
   );
 
+  useEffect(() => {
+    if (selectedCell) {
+      const cellId = getCellId(selectedCell);
+      const data = cellDeviceData.current.get(cellId);
+      if (data) {
+        updateCellDisplay(selectedCell, data);
+      }
+    }
+  }, [selectedValue]);
+
   const handleLabelChange = (value) => {
     if (selectedCell) {
-      const currentAttrs = selectedCell.get("attrs") || {};
-      selectedCell.set("attrs", {
-        ...currentAttrs,
-        label: { ...currentAttrs.label, text: value },
-      });
-      console.log("Label updated:", value);
-      setUpdateKey((prev) => prev + 1); // Force re-render
+      selectedCell.attr("label/text", value);
     }
   };
 
@@ -2488,7 +2578,7 @@ const DashboardEditor = () => {
 
   const handleEUIChange = (value) => {
     setSelectedEUI(value);
-    setSelectedDevice("");
+    setSelectedDevice(null);
     setDeviceData(null);
 
     // Don't automatically subscribe until device is also selected
@@ -2498,13 +2588,27 @@ const DashboardEditor = () => {
     setSelectedDevice(value);
 
     if (selectedCell && selectedEUI && value) {
+      // Get device model from the selected device
+      const deviceModel = devices[value]?.model;
+
       // Subscribe this cell to the selected device
-      subscribeCellToDevice(selectedCell, selectedEUI, value);
+      subscribeCellToDevice(selectedCell, selectedEUI, value, deviceModel);
 
       // Update the device data display for inspector
       const cellId = getCellId(selectedCell);
       const cellData = cellDeviceData.current.get(cellId);
       setDeviceData(cellData);
+    }
+  };
+
+  const handleValueChange = (event) => {
+    setSelectedValue(event.target.value);
+    if (selectedCell) {
+      const cellId = getCellId(selectedCell);
+      const data = cellDeviceData.current.get(cellId);
+      if (data) {
+        updateCellDisplay(selectedCell, data);
+      }
     }
   };
 
@@ -2707,9 +2811,9 @@ const DashboardEditor = () => {
                   label="Device EUI"
                 >
                   <MenuItem value="">-- Select EUI --</MenuItem>
-                  {deviceEUIs.map((eui) => (
+                  {Object.entries(deviceModels).map(([eui, model]) => (
                     <MenuItem key={eui} value={eui}>
-                      {eui}
+                      {model.name} ({eui})
                     </MenuItem>
                   ))}
                 </Select>
@@ -2723,22 +2827,42 @@ const DashboardEditor = () => {
                   label="Device ID"
                 >
                   <MenuItem value="">-- Select Device ID --</MenuItem>
-                  {deviceIDs.map((id) => (
+                  {Object.entries(devices).map(([id, device]) => (
                     <MenuItem key={id} value={id}>
-                      {id}
+                      {device.name || id}
                     </MenuItem>
                   ))}
                 </Select>
               </FormControl>
 
-              <Box sx={{ mt: 1 }}>
+              {/* Data Display Options */}
+              {selectedDevice && Object.keys(payload).length > 0 && (
+                <FormControl component="fieldset">
+                  <Typography variant="subtitle2">Display Value:</Typography>
+                  <RadioGroup
+                    value={selectedValue}
+                    onChange={handleValueChange}
+                  >
+                    {availableValues.map((value) => (
+                      <FormControlLabel
+                        key={value}
+                        value={value}
+                        control={<Radio size="small" />}
+                        label={value}
+                      />
+                    ))}
+                  </RadioGroup>
+                </FormControl>
+              )}
+
+              {/* <Box sx={{ mt: 1 }}>
                 <Typography variant="subtitle2" fontWeight="bold">
                   Temperature:
                 </Typography>
                 <Typography variant="body2">
                   {deviceData?.decoded_payload?.temperature ?? "N/A"} °C
                 </Typography>
-              </Box>
+              </Box> */}
               <Box
                 ref={inspectorContainerRef}
                 sx={{
