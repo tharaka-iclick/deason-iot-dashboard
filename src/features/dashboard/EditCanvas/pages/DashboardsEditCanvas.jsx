@@ -361,7 +361,8 @@ const DashboardEditor = () => {
 
     if (typeof value !== "undefined") {
       // Update label with device model name if available
-      const modelName = selectedValue || "Device";
+      const modelName =
+      formatKey(selectedValue)  || "Device";
       cell.attr("label/text", `${modelName}: ${value}`);
 
       // Customize appearance based on value type
