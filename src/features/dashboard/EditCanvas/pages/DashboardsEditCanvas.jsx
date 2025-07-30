@@ -36,12 +36,8 @@ import {
   listenForDevices,
   listenForDevicePayload,
 } from "../../../../../src/services/firebase/dataService";
-import {
-  getStorage,
-  ref,
-  uploadString,
-  getDownloadURL,
-} from "firebase/storage";
+import { ref as storageRef, uploadBytes, getDownloadURL, listAll, deleteObject } from "firebase/storage";
+import { storage } from "./../../../../../src/services/firebase/config";
 
 class TemplateImage extends joint.dia.Element {
   defaults() {
@@ -518,186 +514,211 @@ const DashboardEditor = () => {
     const currentId = getLastCmdId(commandManager);
     return currentId === id;
   };
-
-  const saveAsRoutine = async () => {
-    try {
-      const fileHandle = await window.showSaveFilePicker({
-        excludeAcceptAllOption: true,
-        suggestedName: currentFileName.replace("*", ""),
-        types: [
-          {
-            description: "JointJS diagram file",
-            accept: { "application/json": [".joint"] },
-          },
-        ],
-      });
-      const str = JSON.stringify(paperRef.current.model.toJSON());
-      const bytes = new TextEncoder().encode(str);
-      const accessHandle = await fileHandle.createWritable();
-      await accessHandle.write(bytes);
-      await accessHandle.close();
-      setCurrentFileHandle(fileHandle);
-      setCurrentFileName(fileHandle.name);
-      commandManagerRef.current.reset();
-      setCurrentCmdId(null);
-    } catch (error) {
-      console.error("Save As failed:", error);
-    }
-  };
-
-  const handleNew = async () => {
-    try {
-      const fileHandle = await window.showSaveFilePicker({
-        excludeAcceptAllOption: true,
-        suggestedName: "diagram.joint",
-        types: [
-          {
-            description: "JointJS diagram file",
-            accept: { "application/json": [".joint"] },
-          },
-        ],
-      });
-      paperRef.current.model.clear();
-      const str = JSON.stringify(paperRef.current.model.toJSON());
-      const bytes = new TextEncoder().encode(str);
-      const accessHandle = await fileHandle.createWritable();
-      await accessHandle.write(bytes);
-      await accessHandle.close();
-      setCurrentFileHandle(fileHandle);
-      setCurrentFileName(fileHandle.name);
-      commandManagerRef.current.reset();
-      setCurrentCmdId(null);
-    } catch (error) {
-      console.error("New file creation failed:", error);
-    }
-  };
-
-  const handleSave = async () => {
-    if (currentFileHandle) {
-      try {
-        const str = JSON.stringify(paperRef.current.model.toJSON());
-        const bytes = new TextEncoder().encode(str);
-        const accessHandle = await currentFileHandle.createWritable();
-        await accessHandle.write(bytes);
-        await accessHandle.close();
-        setCurrentCmdId(getLastCmdId(commandManagerRef.current));
-        setCurrentFileName(currentFileName.replace("*", ""));
-      } catch (error) {
-        console.error("Save failed:", error);
-      }
-    } else {
-      await saveAsRoutine();
-    }
-  };
-
-  const handleOpen = async () => {
-    try {
-      const [fileHandle] = await window.showOpenFilePicker({
-        excludeAcceptAllOption: true,
-        types: [
-          {
-            description: "JointJS diagram file",
-            accept: { "application/json": [".joint"] },
-          },
-        ],
-      });
-      const file = await fileHandle.getFile();
-      const fileReader = new FileReader();
-      fileReader.onload = () => {
-        paperRef.current.model.fromJSON(JSON.parse(fileReader.result));
-        commandManagerRef.current.reset();
-        setCurrentFileHandle(fileHandle);
-        setCurrentFileName(fileHandle.name);
-        setCurrentCmdId(null);
-      };
-      fileReader.readAsText(file);
-    } catch (error) {
-      console.error("Open file failed:", error);
-    }
-  };
-
-  // const handleNew = async () => {
-  //   const fileName = prompt("Enter new file name (without extension):");
-  //   if (!fileName) return;
-
-  //   paperRef.current.model.clear();
-
-  //   const json = JSON.stringify(paperRef.current.model.toJSON());
-  //   const storage = getStorage();
-  //   const storageRef = ref(storage, `diagrams/${fileName}.joint`);
-
-  //   try {
-  //     await uploadString(storageRef, json, "raw");
-  //     setCurrentFileName(fileName);
-  //     commandManagerRef.current.reset();
-  //     setCurrentCmdId(null);
-  //     console.log("New file created:", fileName);
-  //   } catch (error) {
-  //     console.error("Firebase New File Creation Failed:", error);
-  //   }
-  // };
-
-  // const handleOpen = async () => {
-  //   const fileName = prompt("Enter file name to open (without extension):");
-  //   if (!fileName) return;
-
-  //   const storage = getStorage();
-  //   const storageRef = ref(storage, `diagrams/${fileName}.joint`);
-
-  //   try {
-  //     const url = await getDownloadURL(storageRef);
-  //     const response = await fetch(url);
-  //     const data = await response.json();
-
-  //     paperRef.current.model.fromJSON(data);
-  //     setCurrentFileName(fileName);
-  //     commandManagerRef.current.reset();
-  //     setCurrentCmdId(null);
-  //     console.log("Opened:", fileName);
-  //   } catch (error) {
-  //     console.error("Firebase Open Failed:", error);
-  //   }
-  // };
+//SAVE LOCAL START
 
   // const saveAsRoutine = async () => {
-  //   const fileName = prompt("Enter file name to save (without extension):");
-  //   if (!fileName) return;
-
-  //   const storage = getStorage();
-  //   const storageRef = ref(storage, `diagrams/${fileName}.joint`);
-
-  //   const json = JSON.stringify(paperRef.current.model.toJSON());
-
   //   try {
-  //     await uploadString(storageRef, json, "raw");
-  //     setCurrentFileName(fileName);
-  //     setCurrentCmdId(getLastCmdId(commandManagerRef.current));
-  //     console.log("Saved As:", fileName);
+  //     const fileHandle = await window.showSaveFilePicker({
+  //       excludeAcceptAllOption: true,
+  //       suggestedName: currentFileName.replace("*", ""),
+  //       types: [
+  //         {
+  //           description: "JointJS diagram file",
+  //           accept: { "application/json": [".joint"] },
+  //         },
+  //       ],
+  //     });
+  //     const str = JSON.stringify(paperRef.current.model.toJSON());
+  //     const bytes = new TextEncoder().encode(str);
+  //     const accessHandle = await fileHandle.createWritable();
+  //     await accessHandle.write(bytes);
+  //     await accessHandle.close();
+  //     setCurrentFileHandle(fileHandle);
+  //     setCurrentFileName(fileHandle.name);
+  //     commandManagerRef.current.reset();
+  //     setCurrentCmdId(null);
   //   } catch (error) {
-  //     console.error("Firebase Save As Failed:", error);
+  //     console.error("Save As failed:", error);
+  //   }
+  // };
+
+  // const handleNew = async () => {
+  //   try {
+  //     const fileHandle = await window.showSaveFilePicker({
+  //       excludeAcceptAllOption: true,
+  //       suggestedName: "diagram.joint",
+  //       types: [
+  //         {
+  //           description: "JointJS diagram file",
+  //           accept: { "application/json": [".joint"] },
+  //         },
+  //       ],
+  //     });
+  //     paperRef.current.model.clear();
+  //     const str = JSON.stringify(paperRef.current.model.toJSON());
+  //     const bytes = new TextEncoder().encode(str);
+  //     const accessHandle = await fileHandle.createWritable();
+  //     await accessHandle.write(bytes);
+  //     await accessHandle.close();
+  //     setCurrentFileHandle(fileHandle);
+  //     setCurrentFileName(fileHandle.name);
+  //     commandManagerRef.current.reset();
+  //     setCurrentCmdId(null);
+  //   } catch (error) {
+  //     console.error("New file creation failed:", error);
   //   }
   // };
 
   // const handleSave = async () => {
-  //   if (!currentFileName) {
+  //   if (currentFileHandle) {
+  //     try {
+  //       const str = JSON.stringify(paperRef.current.model.toJSON());
+  //       const bytes = new TextEncoder().encode(str);
+  //       const accessHandle = await currentFileHandle.createWritable();
+  //       await accessHandle.write(bytes);
+  //       await accessHandle.close();
+  //       setCurrentCmdId(getLastCmdId(commandManagerRef.current));
+  //       setCurrentFileName(currentFileName.replace("*", ""));
+  //     } catch (error) {
+  //       console.error("Save failed:", error);
+  //     }
+  //   } else {
   //     await saveAsRoutine();
-  //     return;
-  //   }
-
-  //   const storage = getStorage();
-  //   const storageRef = ref(storage, `diagrams/${currentFileName}.joint`);
-
-  //   const json = JSON.stringify(paperRef.current.model.toJSON());
-
-  //   try {
-  //     await uploadString(storageRef, json, "raw");
-  //     console.log("Saved to Firebase");
-  //     setCurrentCmdId(getLastCmdId(commandManagerRef.current));
-  //   } catch (error) {
-  //     console.error("Firebase Save Failed:", error);
   //   }
   // };
 
+  // const handleOpen = async () => {
+  //   try {
+  //     const [fileHandle] = await window.showOpenFilePicker({
+  //       excludeAcceptAllOption: true,
+  //       types: [
+  //         {
+  //           description: "JointJS diagram file",
+  //           accept: { "application/json": [".joint"] },
+  //         },
+  //       ],
+  //     });
+  //     const file = await fileHandle.getFile();
+  //     const fileReader = new FileReader();
+  //     fileReader.onload = () => {
+  //       paperRef.current.model.fromJSON(JSON.parse(fileReader.result));
+  //       commandManagerRef.current.reset();
+  //       setCurrentFileHandle(fileHandle);
+  //       setCurrentFileName(fileHandle.name);
+  //       setCurrentCmdId(null);
+  //     };
+  //     fileReader.readAsText(file);
+  //   } catch (error) {
+  //     console.error("Open file failed:", error);
+  //   }
+  // };
+
+
+//END
+
+
+//FIREBASE START
+ // Helper functions
+const saveAsRoutine = async () => {
+  try {
+    const fileName = currentFileName.replace("*", "") || "diagram.joint";
+    const str = JSON.stringify(paperRef.current.model.toJSON());
+    const bytes = new TextEncoder().encode(str);
+    
+    // Create a reference to the file in Firebase Storage
+    const fileRef = storageRef(storage, `diagrams/${fileName}`);
+    
+    // Upload the file
+    await uploadBytes(fileRef, bytes);
+    
+    // Update state
+    setCurrentFileName(fileName);
+    commandManagerRef.current.reset();
+    setCurrentCmdId(null);
+    
+    return fileName; // Return the filename for reference
+  } catch (error) {
+    console.error("Save As failed:", error);
+    throw error; // Re-throw to handle in the calling function if needed
+  }
+};
+
+const handleNew = async () => {
+  try {
+    // Clear the current model
+    paperRef.current.model.clear();
+    
+    // Save as new file with default name
+    const fileName = "diagram.joint";
+    const str = JSON.stringify(paperRef.current.model.toJSON());
+    const bytes = new TextEncoder().encode(str);
+    
+    // Upload to Firebase
+    const fileRef = storageRef(storage, `diagrams/${fileName}`);
+    await uploadBytes(fileRef, bytes);
+    
+    // Update state
+    setCurrentFileName(fileName);
+    commandManagerRef.current.reset();
+    setCurrentCmdId(null);
+  } catch (error) {
+    console.error("New file creation failed:", error);
+  }
+};
+
+
+const handleSave = async () => {
+  try {
+    const fileName = currentFileName.replace("*", "") || "diagram.joint";
+    const str = JSON.stringify(paperRef.current.model.toJSON());
+    const bytes = new TextEncoder().encode(str);
+    
+    // Upload to Firebase (this will overwrite existing file with same name)
+    const fileRef = storageRef(storage, `diagrams/${fileName}`);
+    await uploadBytes(fileRef, bytes);
+    
+    // Update state
+    setCurrentCmdId(getLastCmdId(commandManagerRef.current));
+    setCurrentFileName(fileName);
+  } catch (error) {
+    console.error("Save failed:", error);
+  }
+};
+
+
+const handleOpen = async () => {
+  try {
+    // First, list available files in the diagrams folder
+    const listRef = storageRef(storage, 'diagrams');
+    const res = await listAll(listRef);
+    
+    // For simplicity, we'll just open the first file found
+    // In a real app, you'd want to implement a file picker UI
+    if (res.items.length > 0) {
+      const fileRef = res.items[0]; // Get first file
+      const url = await getDownloadURL(fileRef);
+      
+      // Fetch the file contents
+      const response = await fetch(url);
+      const jsonData = await response.json();
+      
+      // Load into the paper model
+      paperRef.current.model.fromJSON(jsonData);
+      
+      // Update state
+      commandManagerRef.current.reset();
+      setCurrentFileName(fileRef.name);
+      setCurrentCmdId(null);
+    } else {
+      console.log("No files found in storage");
+    }
+  } catch (error) {
+    console.error("Open file failed:", error);
+  }
+};
+
+
+  /////END
   const handleUndo = () => {
     commandManagerRef.current.undo();
   };
