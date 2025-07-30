@@ -25,6 +25,9 @@ import {
 import * as joint from "@joint/plus";
 import MotorPumpSVG from "../../../WidgetSVG/MotorPumpSVG";
 import HeatPumpSVG from "../../../WidgetSVG/HeatPumpSVG";
+import CoolingPlate from "../../../WidgetSVG/CoolingPlate";
+import VatAgitator from "../../../WidgetSVG/VatAgitator";
+import Chille from "../../../WidgetSVG/Chiller";
 import {
   // listenForDeviceEUIs,
   // listenForDeviceIDs,
@@ -33,6 +36,12 @@ import {
   listenForDevices,
   listenForDevicePayload,
 } from "../../../../../src/services/firebase/dataService";
+import {
+  getStorage,
+  ref,
+  uploadString,
+  getDownloadURL,
+} from "firebase/storage";
 
 class TemplateImage extends joint.dia.Element {
   defaults() {
@@ -348,12 +357,11 @@ const DashboardEditor = () => {
     const payload = data || {};
     const value = payload[selectedValue];
 
-    console.log("payload", value);
+    console.log("payload01", data);
 
     if (typeof value !== "undefined") {
       // Update label with device model name if available
-      const modelName =
-        deviceModels[cell.prop("custom/deviceModel")]?.name || "Device";
+      const modelName = selectedValue || "Device";
       cell.attr("label/text", `${modelName}: ${value}`);
 
       // Customize appearance based on value type
@@ -398,7 +406,7 @@ const DashboardEditor = () => {
           console.log("payloadKeys", payloadKeys);
 
           if (!selectedValue || !payloadKeys.includes(selectedValue)) {
-            setSelectedValue(payloadKeys); // Set default to the first available value
+            setSelectedValue(payloadKeys);
           }
         }
         updateCellDisplay(cell, data);
@@ -406,14 +414,11 @@ const DashboardEditor = () => {
 
       deviceSubscriptions.current.set(cellId, unsubscribe);
 
-      // Store device info in cell properties
       cell.prop("custom/deviceEUI", eui);
       cell.prop("custom/deviceID", deviceId);
       cell.prop("custom/deviceModel", deviceModel);
     }
   };
-
-  // Function to unsubscribe a cell from device data
   const unsubscribeCellFromDevice = (cellId) => {
     if (deviceSubscriptions.current.has(cellId)) {
       deviceSubscriptions.current.get(cellId)();
@@ -426,6 +431,7 @@ const DashboardEditor = () => {
     const unsubscribe = listenForDeviceModels((models) => {
       console.log("Fetched device models:", models);
       setDeviceModels(models);
+      console.log("models", models);
       // console.log("Fetched EUIs:", euis);
       // setDeviceEUIs(euis);
       // if (euis.length > 0 && !selectedEUI) {
@@ -608,6 +614,88 @@ const DashboardEditor = () => {
       console.error("Open file failed:", error);
     }
   };
+
+  // const handleNew = async () => {
+  //   const fileName = prompt("Enter new file name (without extension):");
+  //   if (!fileName) return;
+
+  //   paperRef.current.model.clear();
+
+  //   const json = JSON.stringify(paperRef.current.model.toJSON());
+  //   const storage = getStorage();
+  //   const storageRef = ref(storage, `diagrams/${fileName}.joint`);
+
+  //   try {
+  //     await uploadString(storageRef, json, "raw");
+  //     setCurrentFileName(fileName);
+  //     commandManagerRef.current.reset();
+  //     setCurrentCmdId(null);
+  //     console.log("New file created:", fileName);
+  //   } catch (error) {
+  //     console.error("Firebase New File Creation Failed:", error);
+  //   }
+  // };
+
+  // const handleOpen = async () => {
+  //   const fileName = prompt("Enter file name to open (without extension):");
+  //   if (!fileName) return;
+
+  //   const storage = getStorage();
+  //   const storageRef = ref(storage, `diagrams/${fileName}.joint`);
+
+  //   try {
+  //     const url = await getDownloadURL(storageRef);
+  //     const response = await fetch(url);
+  //     const data = await response.json();
+
+  //     paperRef.current.model.fromJSON(data);
+  //     setCurrentFileName(fileName);
+  //     commandManagerRef.current.reset();
+  //     setCurrentCmdId(null);
+  //     console.log("Opened:", fileName);
+  //   } catch (error) {
+  //     console.error("Firebase Open Failed:", error);
+  //   }
+  // };
+
+  // const saveAsRoutine = async () => {
+  //   const fileName = prompt("Enter file name to save (without extension):");
+  //   if (!fileName) return;
+
+  //   const storage = getStorage();
+  //   const storageRef = ref(storage, `diagrams/${fileName}.joint`);
+
+  //   const json = JSON.stringify(paperRef.current.model.toJSON());
+
+  //   try {
+  //     await uploadString(storageRef, json, "raw");
+  //     setCurrentFileName(fileName);
+  //     setCurrentCmdId(getLastCmdId(commandManagerRef.current));
+  //     console.log("Saved As:", fileName);
+  //   } catch (error) {
+  //     console.error("Firebase Save As Failed:", error);
+  //   }
+  // };
+
+  // const handleSave = async () => {
+  //   if (!currentFileName) {
+  //     await saveAsRoutine();
+  //     return;
+  //   }
+
+  //   const storage = getStorage();
+  //   const storageRef = ref(storage, `diagrams/${currentFileName}.joint`);
+
+  //   const json = JSON.stringify(paperRef.current.model.toJSON());
+
+  //   try {
+  //     await uploadString(storageRef, json, "raw");
+  //     console.log("Saved to Firebase");
+  //     setCurrentCmdId(getLastCmdId(commandManagerRef.current));
+  //   } catch (error) {
+  //     console.error("Firebase Save Failed:", error);
+  //   }
+  // };
 
   const handleUndo = () => {
     commandManagerRef.current.undo();
@@ -1054,14 +1142,12 @@ const DashboardEditor = () => {
               "body/transform",
               `translate(-${width / 2}, -${height / 2})`
             );
-          } else if (clone.get("type") === "custom.TemplateImage") {
-            // Resize only standard.Rectangle elements
-            clone.resize(200, 200); // Example: Fixed size for rectangles
-            // Alternative: Use original size with slight modification if needed
-            // const { width, height } = cell.size();
-            // clone.resize(width * 1.5, height * 1.5); // Example: Scale by 1.5x
+          }
+          const cloneSize = cell.get("cloneSize");
+          if (cloneSize) {
+            clone.resize(cloneSize.width, cloneSize.height);
           } else {
-            // Preserve original size for other elements (e.g., custom.TemplateImage)
+            // Fallback to original size
             const { width, height } = cell.size();
             clone.resize(width, height);
           }
@@ -1281,6 +1367,7 @@ const DashboardEditor = () => {
         {
           type: "standard.Rectangle",
           size: { width: 100, height: 60 },
+          cloneSize: { width: 150, height: 80 },
           attrs: {
             body: { fill: "#ffffff", stroke: "#000000" },
             label: { text: "Text", fill: "#000000" },
@@ -1293,6 +1380,7 @@ const DashboardEditor = () => {
         {
           type: "standard.Rectangle",
           size: { width: 100, height: 60 },
+          cloneSize: { width: 80, height: 60 },
           attrs: {
             body: { fill: "#ffffff", stroke: "#000000" },
             label: { text: "Enter text", fill: "#000000" },
@@ -1311,12 +1399,35 @@ const DashboardEditor = () => {
           type: "custom.TemplateImage",
           svg: MotorPumpSVG,
           size: { width: 80, height: 60 },
+          cloneSize: { width: 200, height: 200 },
           attrs: {},
         },
         {
           type: "custom.TemplateImage",
           svg: HeatPumpSVG,
           size: { width: 80, height: 60 },
+          cloneSize: { width: 200, height: 200 },
+          attrs: {},
+        },
+        {
+          type: "custom.TemplateImage",
+          svg: CoolingPlate,
+          size: { width: 80, height: 60 },
+          cloneSize: { width: 200, height: 250 },
+          attrs: {},
+        },
+        {
+          type: "custom.TemplateImage",
+          svg: VatAgitator,
+          size: { width: 80, height: 60 },
+          cloneSize: { width: 200, height: 250 },
+          attrs: {},
+        },
+        {
+          type: "custom.TemplateImage",
+          svg: Chille,
+          size: { width: 80, height: 60 },
+          cloneSize: { width: 250, height: 200 },
           attrs: {},
         },
       ];
@@ -2590,6 +2701,9 @@ const DashboardEditor = () => {
     if (selectedCell && selectedEUI && value) {
       // Get device model from the selected device
       const deviceModel = devices[value]?.model;
+      const deviceModelName =
+        deviceModels[deviceModel]?.name || "Unknown Device";
+      console.log("deviceModelName", deviceModelName);
 
       // Subscribe this cell to the selected device
       subscribeCellToDevice(selectedCell, selectedEUI, value, deviceModel);
@@ -2604,6 +2718,10 @@ const DashboardEditor = () => {
   const handleValueChange = (event) => {
     setSelectedValue(event.target.value);
     if (selectedCell) {
+      console.log(
+        "Stored deviceModelName:",
+        selectedCell.prop("custom/deviceModelName")
+      );
       const cellId = getCellId(selectedCell);
       const data = cellDeviceData.current.get(cellId);
       if (data) {
