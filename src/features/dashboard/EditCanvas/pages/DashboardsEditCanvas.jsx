@@ -28,6 +28,7 @@ import HeatPumpSVG from "../../../WidgetSVG/HeatPumpSVG";
 import CoolingPlate from "../../../WidgetSVG/CoolingPlate";
 import VatAgitator from "../../../WidgetSVG/VatAgitator";
 import Chille from "../../../WidgetSVG/Chiller";
+import IceBank from "../../../WidgetSVG/IceBank";
 import {
   // listenForDeviceEUIs,
   // listenForDeviceIDs,
@@ -614,6 +615,8 @@ const DashboardEditor = () => {
       console.error("Open file failed:", error);
     }
   };
+
+  // firebase file uploading
 
   // const handleNew = async () => {
   //   const fileName = prompt("Enter new file name (without extension):");
@@ -1369,6 +1372,25 @@ const DashboardEditor = () => {
           size: { width: 100, height: 60 },
           cloneSize: { width: 150, height: 80 },
           attrs: {
+            body: {
+              fill: "#ffffff", // transparent background
+              stroke: "transparent", // no border outline
+            },
+            label: {
+              text: "Text",
+              fill: "#000000",
+            },
+          },
+          custom: {
+            description: "A sample rectangle",
+            color: "#ffffff",
+          },
+        },
+        {
+          type: "standard.Rectangle",
+          size: { width: 100, height: 60 },
+          cloneSize: { width: 150, height: 80 },
+          attrs: {
             body: { fill: "#ffffff", stroke: "#000000" },
             label: { text: "Text", fill: "#000000" },
           },
@@ -1430,6 +1452,13 @@ const DashboardEditor = () => {
           cloneSize: { width: 250, height: 200 },
           attrs: {},
         },
+        {
+          type: "custom.TemplateImage",
+          svg: IceBank,
+          size: { width: 80, height: 60 },
+          cloneSize: { width: 250, height: 200 },
+          attrs: {},
+        },
       ];
 
       const stencilPorts = [
@@ -1468,10 +1497,51 @@ const DashboardEditor = () => {
         // `,
         //   },
         // },
+        {
+          type: "standard.Rectangle",
+          size: { width: 10, height: 10 },
+          attrs: {
+            body: {
+              fill: "transparent",
+              stroke: "transparent",
+            },
+          },
+          port: {
+            markup: joint.util.svg/*xml*/ `
+      <g @selector="portBody" magnet="active">
+        <rect 
+          x="0" y="2.5" 
+          width="12" height="20" 
+          fill="url(#portGradient)" 
+        />
+        <rect 
+          x="12" y="0" 
+          width="2.2" height="25" 
+          fill="#808080" 
+        />
+        <rect 
+          x="15" y="0.7" 
+          width="3.5" height="23.5" 
+          fill="white" 
+          stroke="#808080" 
+          stroke-width="1.3" 
+        />
+        <defs>
+          <linearGradient id="portGradient" x1="6" y1="2.5" x2="6" y2="22.5" gradientUnits="userSpaceOnUse">
+            <stop offset="0.00480769" stop-color="#737373"/>
+            <stop offset="0.346154" stop-color="white"/>
+            <stop offset="0.682692" stop-color="white"/>
+            <stop offset="1" stop-color="#737373"/>
+          </linearGradient>
+        </defs>
+      </g>
+    `,
+          },
+        },
         // Output Port (Path)
         {
           type: "standard.Path",
-          size: { width: 20, height: 20 },
+          size: { width: 30, height: 25 },
           markup: util.svg`
     <rect @selector="pipeBody" />
     <rect @selector="pipeEnd" />
@@ -1521,7 +1591,7 @@ const DashboardEditor = () => {
           },
           port: {
             group: "out",
-            size: { width: 20, height: 20 },
+            size: { width: 30, height: 25 },
             attrs: {
               portRoot: {
                 // magnetSelector: "pipeEnd",
@@ -1578,7 +1648,7 @@ const DashboardEditor = () => {
         // Input Port (Pipe)
         {
           type: "standard.Path",
-          size: { width: 20, height: 20 },
+          size: { width: 30, height: 25 },
           markup: util.svg`
       <rect @selector="pipeBody" />
       <rect @selector="pipeEnd" />
@@ -1630,7 +1700,7 @@ const DashboardEditor = () => {
           },
           port: {
             group: "in",
-            size: { width: 20, height: 20 },
+            size: { width: 30, height: 25 },
             attrs: {
               portRoot: {
                 magnetSelector: "pipeEnd",
@@ -1711,7 +1781,7 @@ const DashboardEditor = () => {
         // },
         {
           type: "standard.Path",
-          size: { width: 20, height: 20 },
+          size: { width: 30, height: 25 },
           markup: util.svg`
       <rect @selector="pipeBody" />
       <rect @selector="pipeEnd" />
@@ -1762,7 +1832,7 @@ const DashboardEditor = () => {
           },
           port: {
             group: "out",
-            size: { width: 20, height: 20 },
+            size: { width: 30, height: 25 },
             attrs: {
               portRoot: {
                 magnetSelector: "pipeEnd",
@@ -1823,7 +1893,7 @@ const DashboardEditor = () => {
         // New Vertical Input Port (Pipe)
         {
           type: "standard.Path",
-          size: { width: 20, height: 20 },
+          size: { width: 30, height: 25 },
           markup: util.svg`
       <rect @selector="pipeBody" />
       <rect @selector="pipeEnd" />
@@ -1874,7 +1944,7 @@ const DashboardEditor = () => {
           },
           port: {
             group: "in",
-            size: { width: 20, height: 20 },
+            size: { width: 30, height: 25 },
             attrs: {
               portRoot: {
                 magnetSelector: "pipeEnd",
@@ -1940,23 +2010,23 @@ const DashboardEditor = () => {
               position: { name: "left" }, // Input ports on the left
               attrs: { portBody: { magnet: true } },
               args: { dx: 0, dy: 0 },
-              label: {
-                position: { name: "inside", args: { offset: 22 } },
-                markup: util.svg`
-            <text @selector="portLabel" y="0.3em" fill="#333" text-anchor="middle" font-size="15" font-family="sans-serif" />
-          `,
-              },
+              //     label: {
+              //       position: { name: "inside", args: { offset: 22 } },
+              //       markup: util.svg`
+              //   <text @selector="portLabel" y="0.3em" fill="#333" text-anchor="middle" font-size="15" font-family="sans-serif" />
+              // `,
+              //     },
             },
             out: {
               position: { name: "right" }, // Output ports on the right
               attrs: { portBody: { magnet: true } },
               args: { dx: 0, dy: 0 },
-              label: {
-                position: { name: "inside", args: { offset: 22 } },
-                markup: util.svg`
-            <text @selector="portLabel" y="0.3em" fill="#333" text-anchor="middle" font-size="15" font-family="sans-serif" />
-          `,
-              },
+              //     label: {
+              //       position: { name: "inside", args: { offset: 22 } },
+              //       markup: util.svg`
+              //   <text @selector="portLabel" y="0.3em" fill="#333" text-anchor="middle" font-size="15" font-family="sans-serif" />
+              // `,
+              //     },
             },
           },
           items: [
@@ -2217,23 +2287,23 @@ const DashboardEditor = () => {
 
       // graph.addCell(templateImage);
 
-      const templateImage01 = new TemplateImage({
-        svg: HeatPumpSVG,
-        attrs: {},
-      });
-      const [ti1] = addImages(templateImage01, 220);
-      ti1.set("color", "red");
+      // const templateImage01 = new TemplateImage({
+      //   svg: HeatPumpSVG,
+      //   attrs: {},
+      // });
+      // const [ti1] = addImages(templateImage01, 220);
+      // ti1.set("color", "red");
 
-      function addImages(image, x = 0, y = 20) {
-        const images = [
-          image
-            .clone()
-            .resize(250, 250)
-            .position(x, y + 230),
-        ];
-        graph.addCells(images);
-        return images;
-      }
+      // function addImages(image, x = 0, y = 20) {
+      //   const images = [
+      //     image
+      //       .clone()
+      //       .resize(250, 250)
+      //       .position(x, y + 230),
+      //   ];
+      //   graph.addCells(images);
+      //   return images;
+      // }
 
       const svgMarkup = {
         tagName: "svg",
@@ -2657,9 +2727,21 @@ const DashboardEditor = () => {
     }
   }, [selectedValue]);
 
+  // const handleLabelChange = (value) => {
+  //   if (selectedCell) {
+  //     selectedCell.attr("label/text", value);
+  //   }
+  // };
+
   const handleLabelChange = (value) => {
     if (selectedCell) {
-      selectedCell.attr("label/text", value);
+      const currentAttrs = selectedCell.get("attrs") || {};
+      selectedCell.set("attrs", {
+        ...currentAttrs,
+        label: { ...currentAttrs.label, text: value },
+      });
+      console.log("Label updated:", value);
+      setUpdateKey((prev) => prev + 1);
     }
   };
 
