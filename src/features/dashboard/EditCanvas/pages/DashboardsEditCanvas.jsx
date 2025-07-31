@@ -25,6 +25,10 @@ import {
 import * as joint from "@joint/plus";
 import MotorPumpSVG from "../../../WidgetSVG/MotorPumpSVG";
 import HeatPumpSVG from "../../../WidgetSVG/HeatPumpSVG";
+import CoolingPlate from "../../../WidgetSVG/CoolingPlate";
+import VatAgitator from "../../../WidgetSVG/VatAgitator";
+import Chille from "../../../WidgetSVG/Chiller";
+import IceBank from "../../../WidgetSVG/IceBank";
 import {
   // listenForDeviceEUIs,
   // listenForDeviceIDs,
@@ -33,6 +37,12 @@ import {
   listenForDevices,
   listenForDevicePayload,
 } from "../../../../../src/services/firebase/dataService";
+import {
+  getStorage,
+  ref,
+  uploadString,
+  getDownloadURL,
+} from "firebase/storage";
 
 class TemplateImage extends joint.dia.Element {
   defaults() {
@@ -348,12 +358,11 @@ const DashboardEditor = () => {
     const payload = data || {};
     const value = payload[selectedValue];
 
-    console.log("payload", value);
+    console.log("payload01", data);
 
     if (typeof value !== "undefined") {
       // Update label with device model name if available
-      const modelName =
-        deviceModels[cell.prop("custom/deviceModel")]?.name || "Device";
+      const modelName = selectedValue || "Device";
       cell.attr("label/text", `${modelName}: ${value}`);
 
       // Customize appearance based on value type
@@ -398,7 +407,7 @@ const DashboardEditor = () => {
           console.log("payloadKeys", payloadKeys);
 
           if (!selectedValue || !payloadKeys.includes(selectedValue)) {
-            setSelectedValue(payloadKeys); // Set default to the first available value
+            setSelectedValue(payloadKeys);
           }
         }
         updateCellDisplay(cell, data);
@@ -406,14 +415,11 @@ const DashboardEditor = () => {
 
       deviceSubscriptions.current.set(cellId, unsubscribe);
 
-      // Store device info in cell properties
       cell.prop("custom/deviceEUI", eui);
       cell.prop("custom/deviceID", deviceId);
       cell.prop("custom/deviceModel", deviceModel);
     }
   };
-
-  // Function to unsubscribe a cell from device data
   const unsubscribeCellFromDevice = (cellId) => {
     if (deviceSubscriptions.current.has(cellId)) {
       deviceSubscriptions.current.get(cellId)();
@@ -426,6 +432,7 @@ const DashboardEditor = () => {
     const unsubscribe = listenForDeviceModels((models) => {
       console.log("Fetched device models:", models);
       setDeviceModels(models);
+      console.log("models", models);
       // console.log("Fetched EUIs:", euis);
       // setDeviceEUIs(euis);
       // if (euis.length > 0 && !selectedEUI) {
@@ -608,6 +615,90 @@ const DashboardEditor = () => {
       console.error("Open file failed:", error);
     }
   };
+
+  // firebase file uploading
+
+  // const handleNew = async () => {
+  //   const fileName = prompt("Enter new file name (without extension):");
+  //   if (!fileName) return;
+
+  //   paperRef.current.model.clear();
+
+  //   const json = JSON.stringify(paperRef.current.model.toJSON());
+  //   const storage = getStorage();
+  //   const storageRef = ref(storage, `diagrams/${fileName}.joint`);
+
+  //   try {
+  //     await uploadString(storageRef, json, "raw");
+  //     setCurrentFileName(fileName);
+  //     commandManagerRef.current.reset();
+  //     setCurrentCmdId(null);
+  //     console.log("New file created:", fileName);
+  //   } catch (error) {
+  //     console.error("Firebase New File Creation Failed:", error);
+  //   }
+  // };
+
+  // const handleOpen = async () => {
+  //   const fileName = prompt("Enter file name to open (without extension):");
+  //   if (!fileName) return;
+
+  //   const storage = getStorage();
+  //   const storageRef = ref(storage, `diagrams/${fileName}.joint`);
+
+  //   try {
+  //     const url = await getDownloadURL(storageRef);
+  //     const response = await fetch(url);
+  //     const data = await response.json();
+
+  //     paperRef.current.model.fromJSON(data);
+  //     setCurrentFileName(fileName);
+  //     commandManagerRef.current.reset();
+  //     setCurrentCmdId(null);
+  //     console.log("Opened:", fileName);
+  //   } catch (error) {
+  //     console.error("Firebase Open Failed:", error);
+  //   }
+  // };
+
+  // const saveAsRoutine = async () => {
+  //   const fileName = prompt("Enter file name to save (without extension):");
+  //   if (!fileName) return;
+
+  //   const storage = getStorage();
+  //   const storageRef = ref(storage, `diagrams/${fileName}.joint`);
+
+  //   const json = JSON.stringify(paperRef.current.model.toJSON());
+
+  //   try {
+  //     await uploadString(storageRef, json, "raw");
+  //     setCurrentFileName(fileName);
+  //     setCurrentCmdId(getLastCmdId(commandManagerRef.current));
+  //     console.log("Saved As:", fileName);
+  //   } catch (error) {
+  //     console.error("Firebase Save As Failed:", error);
+  //   }
+  // };
+
+  // const handleSave = async () => {
+  //   if (!currentFileName) {
+  //     await saveAsRoutine();
+  //     return;
+  //   }
+
+  //   const storage = getStorage();
+  //   const storageRef = ref(storage, `diagrams/${currentFileName}.joint`);
+
+  //   const json = JSON.stringify(paperRef.current.model.toJSON());
+
+  //   try {
+  //     await uploadString(storageRef, json, "raw");
+  //     console.log("Saved to Firebase");
+  //     setCurrentCmdId(getLastCmdId(commandManagerRef.current));
+  //   } catch (error) {
+  //     console.error("Firebase Save Failed:", error);
+  //   }
+  // };
 
   const handleUndo = () => {
     commandManagerRef.current.undo();
@@ -1054,14 +1145,12 @@ const DashboardEditor = () => {
               "body/transform",
               `translate(-${width / 2}, -${height / 2})`
             );
-          } else if (clone.get("type") === "custom.TemplateImage") {
-            // Resize only standard.Rectangle elements
-            clone.resize(200, 200); // Example: Fixed size for rectangles
-            // Alternative: Use original size with slight modification if needed
-            // const { width, height } = cell.size();
-            // clone.resize(width * 1.5, height * 1.5); // Example: Scale by 1.5x
+          }
+          const cloneSize = cell.get("cloneSize");
+          if (cloneSize) {
+            clone.resize(cloneSize.width, cloneSize.height);
           } else {
-            // Preserve original size for other elements (e.g., custom.TemplateImage)
+            // Fallback to original size
             const { width, height } = cell.size();
             clone.resize(width, height);
           }
@@ -1281,6 +1370,26 @@ const DashboardEditor = () => {
         {
           type: "standard.Rectangle",
           size: { width: 100, height: 60 },
+          cloneSize: { width: 150, height: 80 },
+          attrs: {
+            body: {
+              fill: "#ffffff", // transparent background
+              stroke: "transparent", // no border outline
+            },
+            label: {
+              text: "Text",
+              fill: "#000000",
+            },
+          },
+          custom: {
+            description: "A sample rectangle",
+            color: "#ffffff",
+          },
+        },
+        {
+          type: "standard.Rectangle",
+          size: { width: 100, height: 60 },
+          cloneSize: { width: 150, height: 80 },
           attrs: {
             body: { fill: "#ffffff", stroke: "#000000" },
             label: { text: "Text", fill: "#000000" },
@@ -1293,6 +1402,7 @@ const DashboardEditor = () => {
         {
           type: "standard.Rectangle",
           size: { width: 100, height: 60 },
+          cloneSize: { width: 80, height: 60 },
           attrs: {
             body: { fill: "#ffffff", stroke: "#000000" },
             label: { text: "Enter text", fill: "#000000" },
@@ -1311,12 +1421,42 @@ const DashboardEditor = () => {
           type: "custom.TemplateImage",
           svg: MotorPumpSVG,
           size: { width: 80, height: 60 },
+          cloneSize: { width: 200, height: 200 },
           attrs: {},
         },
         {
           type: "custom.TemplateImage",
           svg: HeatPumpSVG,
           size: { width: 80, height: 60 },
+          cloneSize: { width: 200, height: 200 },
+          attrs: {},
+        },
+        {
+          type: "custom.TemplateImage",
+          svg: CoolingPlate,
+          size: { width: 80, height: 60 },
+          cloneSize: { width: 200, height: 250 },
+          attrs: {},
+        },
+        {
+          type: "custom.TemplateImage",
+          svg: VatAgitator,
+          size: { width: 80, height: 60 },
+          cloneSize: { width: 200, height: 250 },
+          attrs: {},
+        },
+        {
+          type: "custom.TemplateImage",
+          svg: Chille,
+          size: { width: 80, height: 60 },
+          cloneSize: { width: 250, height: 200 },
+          attrs: {},
+        },
+        {
+          type: "custom.TemplateImage",
+          svg: IceBank,
+          size: { width: 80, height: 60 },
+          cloneSize: { width: 250, height: 200 },
           attrs: {},
         },
       ];
@@ -1357,10 +1497,51 @@ const DashboardEditor = () => {
         // `,
         //   },
         // },
+        {
+          type: "standard.Rectangle",
+          size: { width: 10, height: 10 },
+          attrs: {
+            body: {
+              fill: "transparent",
+              stroke: "transparent",
+            },
+          },
+          port: {
+            markup: joint.util.svg/*xml*/ `
+      <g @selector="portBody" magnet="active">
+        <rect 
+          x="0" y="2.5" 
+          width="12" height="20" 
+          fill="url(#portGradient)" 
+        />
+        <rect 
+          x="12" y="0" 
+          width="2.2" height="25" 
+          fill="#808080" 
+        />
+        <rect 
+          x="15" y="0.7" 
+          width="3.5" height="23.5" 
+          fill="white" 
+          stroke="#808080" 
+          stroke-width="1.3" 
+        />
+        <defs>
+          <linearGradient id="portGradient" x1="6" y1="2.5" x2="6" y2="22.5" gradientUnits="userSpaceOnUse">
+            <stop offset="0.00480769" stop-color="#737373"/>
+            <stop offset="0.346154" stop-color="white"/>
+            <stop offset="0.682692" stop-color="white"/>
+            <stop offset="1" stop-color="#737373"/>
+          </linearGradient>
+        </defs>
+      </g>
+    `,
+          },
+        },
         // Output Port (Path)
         {
           type: "standard.Path",
-          size: { width: 20, height: 20 },
+          size: { width: 30, height: 25 },
           markup: util.svg`
     <rect @selector="pipeBody" />
     <rect @selector="pipeEnd" />
@@ -1410,7 +1591,7 @@ const DashboardEditor = () => {
           },
           port: {
             group: "out",
-            size: { width: 20, height: 20 },
+            size: { width: 30, height: 25 },
             attrs: {
               portRoot: {
                 // magnetSelector: "pipeEnd",
@@ -1467,7 +1648,7 @@ const DashboardEditor = () => {
         // Input Port (Pipe)
         {
           type: "standard.Path",
-          size: { width: 20, height: 20 },
+          size: { width: 30, height: 25 },
           markup: util.svg`
       <rect @selector="pipeBody" />
       <rect @selector="pipeEnd" />
@@ -1519,7 +1700,7 @@ const DashboardEditor = () => {
           },
           port: {
             group: "in",
-            size: { width: 20, height: 20 },
+            size: { width: 30, height: 25 },
             attrs: {
               portRoot: {
                 magnetSelector: "pipeEnd",
@@ -1600,7 +1781,7 @@ const DashboardEditor = () => {
         // },
         {
           type: "standard.Path",
-          size: { width: 20, height: 20 },
+          size: { width: 30, height: 25 },
           markup: util.svg`
       <rect @selector="pipeBody" />
       <rect @selector="pipeEnd" />
@@ -1651,7 +1832,7 @@ const DashboardEditor = () => {
           },
           port: {
             group: "out",
-            size: { width: 20, height: 20 },
+            size: { width: 30, height: 25 },
             attrs: {
               portRoot: {
                 magnetSelector: "pipeEnd",
@@ -1712,7 +1893,7 @@ const DashboardEditor = () => {
         // New Vertical Input Port (Pipe)
         {
           type: "standard.Path",
-          size: { width: 20, height: 20 },
+          size: { width: 30, height: 25 },
           markup: util.svg`
       <rect @selector="pipeBody" />
       <rect @selector="pipeEnd" />
@@ -1763,7 +1944,7 @@ const DashboardEditor = () => {
           },
           port: {
             group: "in",
-            size: { width: 20, height: 20 },
+            size: { width: 30, height: 25 },
             attrs: {
               portRoot: {
                 magnetSelector: "pipeEnd",
@@ -1829,23 +2010,23 @@ const DashboardEditor = () => {
               position: { name: "left" }, // Input ports on the left
               attrs: { portBody: { magnet: true } },
               args: { dx: 0, dy: 0 },
-              label: {
-                position: { name: "inside", args: { offset: 22 } },
-                markup: util.svg`
-            <text @selector="portLabel" y="0.3em" fill="#333" text-anchor="middle" font-size="15" font-family="sans-serif" />
-          `,
-              },
+              //     label: {
+              //       position: { name: "inside", args: { offset: 22 } },
+              //       markup: util.svg`
+              //   <text @selector="portLabel" y="0.3em" fill="#333" text-anchor="middle" font-size="15" font-family="sans-serif" />
+              // `,
+              //     },
             },
             out: {
               position: { name: "right" }, // Output ports on the right
               attrs: { portBody: { magnet: true } },
               args: { dx: 0, dy: 0 },
-              label: {
-                position: { name: "inside", args: { offset: 22 } },
-                markup: util.svg`
-            <text @selector="portLabel" y="0.3em" fill="#333" text-anchor="middle" font-size="15" font-family="sans-serif" />
-          `,
-              },
+              //     label: {
+              //       position: { name: "inside", args: { offset: 22 } },
+              //       markup: util.svg`
+              //   <text @selector="portLabel" y="0.3em" fill="#333" text-anchor="middle" font-size="15" font-family="sans-serif" />
+              // `,
+              //     },
             },
           },
           items: [
@@ -2106,23 +2287,23 @@ const DashboardEditor = () => {
 
       // graph.addCell(templateImage);
 
-      const templateImage01 = new TemplateImage({
-        svg: HeatPumpSVG,
-        attrs: {},
-      });
-      const [ti1] = addImages(templateImage01, 220);
-      ti1.set("color", "red");
+      // const templateImage01 = new TemplateImage({
+      //   svg: HeatPumpSVG,
+      //   attrs: {},
+      // });
+      // const [ti1] = addImages(templateImage01, 220);
+      // ti1.set("color", "red");
 
-      function addImages(image, x = 0, y = 20) {
-        const images = [
-          image
-            .clone()
-            .resize(250, 250)
-            .position(x, y + 230),
-        ];
-        graph.addCells(images);
-        return images;
-      }
+      // function addImages(image, x = 0, y = 20) {
+      //   const images = [
+      //     image
+      //       .clone()
+      //       .resize(250, 250)
+      //       .position(x, y + 230),
+      //   ];
+      //   graph.addCells(images);
+      //   return images;
+      // }
 
       const svgMarkup = {
         tagName: "svg",
@@ -2546,9 +2727,21 @@ const DashboardEditor = () => {
     }
   }, [selectedValue]);
 
+  // const handleLabelChange = (value) => {
+  //   if (selectedCell) {
+  //     selectedCell.attr("label/text", value);
+  //   }
+  // };
+
   const handleLabelChange = (value) => {
     if (selectedCell) {
-      selectedCell.attr("label/text", value);
+      const currentAttrs = selectedCell.get("attrs") || {};
+      selectedCell.set("attrs", {
+        ...currentAttrs,
+        label: { ...currentAttrs.label, text: value },
+      });
+      console.log("Label updated:", value);
+      setUpdateKey((prev) => prev + 1);
     }
   };
 
@@ -2590,6 +2783,9 @@ const DashboardEditor = () => {
     if (selectedCell && selectedEUI && value) {
       // Get device model from the selected device
       const deviceModel = devices[value]?.model;
+      const deviceModelName =
+        deviceModels[deviceModel]?.name || "Unknown Device";
+      console.log("deviceModelName", deviceModelName);
 
       // Subscribe this cell to the selected device
       subscribeCellToDevice(selectedCell, selectedEUI, value, deviceModel);
@@ -2604,6 +2800,10 @@ const DashboardEditor = () => {
   const handleValueChange = (event) => {
     setSelectedValue(event.target.value);
     if (selectedCell) {
+      console.log(
+        "Stored deviceModelName:",
+        selectedCell.prop("custom/deviceModelName")
+      );
       const cellId = getCellId(selectedCell);
       const data = cellDeviceData.current.get(cellId);
       if (data) {
