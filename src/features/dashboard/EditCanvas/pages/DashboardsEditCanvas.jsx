@@ -28,7 +28,6 @@ import HeatPumpSVG from "../../../WidgetSVG/HeatPumpSVG";
 import CoolingPlate from "../../../WidgetSVG/CoolingPlate";
 import VatAgitator from "../../../WidgetSVG/VatAgitator";
 import Chille from "../../../WidgetSVG/Chiller";
-import IceBank from "../../../WidgetSVG/IceBank";
 import {
   // listenForDeviceEUIs,
   // listenForDeviceIDs,
@@ -37,12 +36,10 @@ import {
   listenForDevices,
   listenForDevicePayload,
 } from "../../../../../src/services/firebase/dataService";
-import {
-  getStorage,
-  ref,
-  uploadString,
-  getDownloadURL,
-} from "firebase/storage";
+import { ref as storageRef, uploadBytes, getDownloadURL, listAll, deleteObject } from "firebase/storage";
+import { storage } from "./../../../../../src/services/firebase/config";
+import { auth } from "./../../../../../src/services/firebase/config";
+import { v4 as uuidv4 } from 'uuid';
 
 class TemplateImage extends joint.dia.Element {
   defaults() {
@@ -362,7 +359,8 @@ const DashboardEditor = () => {
 
     if (typeof value !== "undefined") {
       // Update label with device model name if available
-      const modelName = selectedValue || "Device";
+      const modelName =
+      formatKey(selectedValue)  || "Device";
       cell.attr("label/text", `${modelName}: ${value}`);
 
       // Customize appearance based on value type
@@ -518,188 +516,222 @@ const DashboardEditor = () => {
     const currentId = getLastCmdId(commandManager);
     return currentId === id;
   };
-
-  const saveAsRoutine = async () => {
-    try {
-      const fileHandle = await window.showSaveFilePicker({
-        excludeAcceptAllOption: true,
-        suggestedName: currentFileName.replace("*", ""),
-        types: [
-          {
-            description: "JointJS diagram file",
-            accept: { "application/json": [".joint"] },
-          },
-        ],
-      });
-      const str = JSON.stringify(paperRef.current.model.toJSON());
-      const bytes = new TextEncoder().encode(str);
-      const accessHandle = await fileHandle.createWritable();
-      await accessHandle.write(bytes);
-      await accessHandle.close();
-      setCurrentFileHandle(fileHandle);
-      setCurrentFileName(fileHandle.name);
-      commandManagerRef.current.reset();
-      setCurrentCmdId(null);
-    } catch (error) {
-      console.error("Save As failed:", error);
-    }
-  };
-
-  const handleNew = async () => {
-    try {
-      const fileHandle = await window.showSaveFilePicker({
-        excludeAcceptAllOption: true,
-        suggestedName: "diagram.joint",
-        types: [
-          {
-            description: "JointJS diagram file",
-            accept: { "application/json": [".joint"] },
-          },
-        ],
-      });
-      paperRef.current.model.clear();
-      const str = JSON.stringify(paperRef.current.model.toJSON());
-      const bytes = new TextEncoder().encode(str);
-      const accessHandle = await fileHandle.createWritable();
-      await accessHandle.write(bytes);
-      await accessHandle.close();
-      setCurrentFileHandle(fileHandle);
-      setCurrentFileName(fileHandle.name);
-      commandManagerRef.current.reset();
-      setCurrentCmdId(null);
-    } catch (error) {
-      console.error("New file creation failed:", error);
-    }
-  };
-
-  const handleSave = async () => {
-    if (currentFileHandle) {
-      try {
-        const str = JSON.stringify(paperRef.current.model.toJSON());
-        const bytes = new TextEncoder().encode(str);
-        const accessHandle = await currentFileHandle.createWritable();
-        await accessHandle.write(bytes);
-        await accessHandle.close();
-        setCurrentCmdId(getLastCmdId(commandManagerRef.current));
-        setCurrentFileName(currentFileName.replace("*", ""));
-      } catch (error) {
-        console.error("Save failed:", error);
-      }
-    } else {
-      await saveAsRoutine();
-    }
-  };
-
-  const handleOpen = async () => {
-    try {
-      const [fileHandle] = await window.showOpenFilePicker({
-        excludeAcceptAllOption: true,
-        types: [
-          {
-            description: "JointJS diagram file",
-            accept: { "application/json": [".joint"] },
-          },
-        ],
-      });
-      const file = await fileHandle.getFile();
-      const fileReader = new FileReader();
-      fileReader.onload = () => {
-        paperRef.current.model.fromJSON(JSON.parse(fileReader.result));
-        commandManagerRef.current.reset();
-        setCurrentFileHandle(fileHandle);
-        setCurrentFileName(fileHandle.name);
-        setCurrentCmdId(null);
-      };
-      fileReader.readAsText(file);
-    } catch (error) {
-      console.error("Open file failed:", error);
-    }
-  };
-
-  // firebase file uploading
-
-  // const handleNew = async () => {
-  //   const fileName = prompt("Enter new file name (without extension):");
-  //   if (!fileName) return;
-
-  //   paperRef.current.model.clear();
-
-  //   const json = JSON.stringify(paperRef.current.model.toJSON());
-  //   const storage = getStorage();
-  //   const storageRef = ref(storage, `diagrams/${fileName}.joint`);
-
-  //   try {
-  //     await uploadString(storageRef, json, "raw");
-  //     setCurrentFileName(fileName);
-  //     commandManagerRef.current.reset();
-  //     setCurrentCmdId(null);
-  //     console.log("New file created:", fileName);
-  //   } catch (error) {
-  //     console.error("Firebase New File Creation Failed:", error);
-  //   }
-  // };
-
-  // const handleOpen = async () => {
-  //   const fileName = prompt("Enter file name to open (without extension):");
-  //   if (!fileName) return;
-
-  //   const storage = getStorage();
-  //   const storageRef = ref(storage, `diagrams/${fileName}.joint`);
-
-  //   try {
-  //     const url = await getDownloadURL(storageRef);
-  //     const response = await fetch(url);
-  //     const data = await response.json();
-
-  //     paperRef.current.model.fromJSON(data);
-  //     setCurrentFileName(fileName);
-  //     commandManagerRef.current.reset();
-  //     setCurrentCmdId(null);
-  //     console.log("Opened:", fileName);
-  //   } catch (error) {
-  //     console.error("Firebase Open Failed:", error);
-  //   }
-  // };
+//SAVE LOCAL START
 
   // const saveAsRoutine = async () => {
-  //   const fileName = prompt("Enter file name to save (without extension):");
-  //   if (!fileName) return;
-
-  //   const storage = getStorage();
-  //   const storageRef = ref(storage, `diagrams/${fileName}.joint`);
-
-  //   const json = JSON.stringify(paperRef.current.model.toJSON());
-
   //   try {
-  //     await uploadString(storageRef, json, "raw");
-  //     setCurrentFileName(fileName);
-  //     setCurrentCmdId(getLastCmdId(commandManagerRef.current));
-  //     console.log("Saved As:", fileName);
+  //     const fileHandle = await window.showSaveFilePicker({
+  //       excludeAcceptAllOption: true,
+  //       suggestedName: currentFileName.replace("*", ""),
+  //       types: [
+  //         {
+  //           description: "JointJS diagram file",
+  //           accept: { "application/json": [".joint"] },
+  //         },
+  //       ],
+  //     });
+  //     const str = JSON.stringify(paperRef.current.model.toJSON());
+  //     const bytes = new TextEncoder().encode(str);
+  //     const accessHandle = await fileHandle.createWritable();
+  //     await accessHandle.write(bytes);
+  //     await accessHandle.close();
+  //     setCurrentFileHandle(fileHandle);
+  //     setCurrentFileName(fileHandle.name);
+  //     commandManagerRef.current.reset();
+  //     setCurrentCmdId(null);
   //   } catch (error) {
-  //     console.error("Firebase Save As Failed:", error);
+  //     console.error("Save As failed:", error);
+  //   }
+  // };
+
+  // const handleNew = async () => {
+  //   try {
+  //     const fileHandle = await window.showSaveFilePicker({
+  //       excludeAcceptAllOption: true,
+  //       suggestedName: "diagram.joint",
+  //       types: [
+  //         {
+  //           description: "JointJS diagram file",
+  //           accept: { "application/json": [".joint"] },
+  //         },
+  //       ],
+  //     });
+  //     paperRef.current.model.clear();
+  //     const str = JSON.stringify(paperRef.current.model.toJSON());
+  //     const bytes = new TextEncoder().encode(str);
+  //     const accessHandle = await fileHandle.createWritable();
+  //     await accessHandle.write(bytes);
+  //     await accessHandle.close();
+  //     setCurrentFileHandle(fileHandle);
+  //     setCurrentFileName(fileHandle.name);
+  //     commandManagerRef.current.reset();
+  //     setCurrentCmdId(null);
+  //   } catch (error) {
+  //     console.error("New file creation failed:", error);
   //   }
   // };
 
   // const handleSave = async () => {
-  //   if (!currentFileName) {
+  //   if (currentFileHandle) {
+  //     try {
+  //       const str = JSON.stringify(paperRef.current.model.toJSON());
+  //       const bytes = new TextEncoder().encode(str);
+  //       const accessHandle = await currentFileHandle.createWritable();
+  //       await accessHandle.write(bytes);
+  //       await accessHandle.close();
+  //       setCurrentCmdId(getLastCmdId(commandManagerRef.current));
+  //       setCurrentFileName(currentFileName.replace("*", ""));
+  //     } catch (error) {
+  //       console.error("Save failed:", error);
+  //     }
+  //   } else {
   //     await saveAsRoutine();
-  //     return;
-  //   }
-
-  //   const storage = getStorage();
-  //   const storageRef = ref(storage, `diagrams/${currentFileName}.joint`);
-
-  //   const json = JSON.stringify(paperRef.current.model.toJSON());
-
-  //   try {
-  //     await uploadString(storageRef, json, "raw");
-  //     console.log("Saved to Firebase");
-  //     setCurrentCmdId(getLastCmdId(commandManagerRef.current));
-  //   } catch (error) {
-  //     console.error("Firebase Save Failed:", error);
   //   }
   // };
 
+  // const handleOpen = async () => {
+  //   try {
+  //     const [fileHandle] = await window.showOpenFilePicker({
+  //       excludeAcceptAllOption: true,
+  //       types: [
+  //         {
+  //           description: "JointJS diagram file",
+  //           accept: { "application/json": [".joint"] },
+  //         },
+  //       ],
+  //     });
+  //     const file = await fileHandle.getFile();
+  //     const fileReader = new FileReader();
+  //     fileReader.onload = () => {
+  //       paperRef.current.model.fromJSON(JSON.parse(fileReader.result));
+  //       commandManagerRef.current.reset();
+  //       setCurrentFileHandle(fileHandle);
+  //       setCurrentFileName(fileHandle.name);
+  //       setCurrentCmdId(null);
+  //     };
+  //     fileReader.readAsText(file);
+  //   } catch (error) {
+  //     console.error("Open file failed:", error);
+  //   }
+  // };
+
+
+//END
+
+
+//FIREBASE START
+
+const saveAsRoutine = async () => {
+  try {
+    const fileName = currentFileName.replace("*", "") || "diagram.joint";
+    const str = JSON.stringify(paperRef.current.model.toJSON());
+    const bytes = new TextEncoder().encode(str);
+    const fileRef = storageRef(storage, `diagrams/${fileName}`);
+    await uploadBytes(fileRef, bytes);
+    setCurrentFileName(fileName);
+    commandManagerRef.current.reset();
+    setCurrentCmdId(null);
+    return fileName; 
+  } catch (error) {
+    console.error("Save As failed:", error);
+    throw error; 
+  }
+};
+
+const handleNew = async () => {
+  try {
+    paperRef.current.model.clear();
+    const fileName = "diagram.joint";
+    const str = JSON.stringify(paperRef.current.model.toJSON());
+    const bytes = new TextEncoder().encode(str);
+    const fileRef = storageRef(storage, `diagrams/${fileName}`);
+    await uploadBytes(fileRef, bytes);
+    setCurrentFileName(fileName);
+    commandManagerRef.current.reset();
+    setCurrentCmdId(null);
+  } catch (error) {
+    console.error("New file creation failed:", error);
+  }
+};
+
+
+const handleSave = async () => {
+
+  const user = auth.currentUser;
+  
+  if (!user) {
+    console.error("User not authenticated");
+    alert("You must be logged in to save diagrams");
+    return;
+  }
+
+  try {
+
+    let fileRef;
+
+    if (!currentFileName) {
+      const uniqueId = uuidv4();
+      fileRef = storageRef(storage, `users/${user.uid}/diagrams/${uniqueId}.joint`);
+    } else {
+      fileRef = storageRef(storage, `users/${user.uid}/diagrams/${currentFileName}.joint`);
+    }
+
+    const json = JSON.stringify(paperRef.current.model.toJSON());
+    const metadata = {
+      customMetadata: {
+        owner: user.uid,
+        created: new Date().toISOString(),
+        lastModified: new Date().toISOString()
+      }
+    };
+
+    await uploadString(fileRef, json, "raw", metadata);
+    
+    console.log("Successfully saved to Firebase");
+    setCurrentCmdId(getLastCmdId(commandManagerRef.current));
+    
+
+    if (!currentFileName) {
+      setCurrentFileName(fileRef.name.split('.')[0]); 
+    }
+    
+    alert("Diagram saved successfully!");
+    
+  } catch (error) {
+    console.error("Firebase Save Failed:", error);
+    alert("Failed to save diagram. Please try again.");
+  }
+};
+
+
+const handleOpen = async () => {
+  try {
+    const listRef = storageRef(storage, 'diagrams');
+    const res = await listAll(listRef);
+
+    if (res.items.length > 0) {
+      const fileRef = res.items[0]; 
+      const url = await getDownloadURL(fileRef);
+      
+      const response = await fetch(url);
+      const jsonData = await response.json();
+      
+
+      paperRef.current.model.fromJSON(jsonData);
+
+      commandManagerRef.current.reset();
+      setCurrentFileName(fileRef.name);
+      setCurrentCmdId(null);
+    } else {
+      console.log("No files found in storage");
+    }
+  } catch (error) {
+    console.error("Open file failed:", error);
+  }
+};
+
+
+  /////END
   const handleUndo = () => {
     commandManagerRef.current.undo();
   };
@@ -1372,25 +1404,6 @@ const DashboardEditor = () => {
           size: { width: 100, height: 60 },
           cloneSize: { width: 150, height: 80 },
           attrs: {
-            body: {
-              fill: "#ffffff", // transparent background
-              stroke: "transparent", // no border outline
-            },
-            label: {
-              text: "Text",
-              fill: "#000000",
-            },
-          },
-          custom: {
-            description: "A sample rectangle",
-            color: "#ffffff",
-          },
-        },
-        {
-          type: "standard.Rectangle",
-          size: { width: 100, height: 60 },
-          cloneSize: { width: 150, height: 80 },
-          attrs: {
             body: { fill: "#ffffff", stroke: "#000000" },
             label: { text: "Text", fill: "#000000" },
           },
@@ -1452,13 +1465,6 @@ const DashboardEditor = () => {
           cloneSize: { width: 250, height: 200 },
           attrs: {},
         },
-        {
-          type: "custom.TemplateImage",
-          svg: IceBank,
-          size: { width: 80, height: 60 },
-          cloneSize: { width: 250, height: 200 },
-          attrs: {},
-        },
       ];
 
       const stencilPorts = [
@@ -1497,51 +1503,10 @@ const DashboardEditor = () => {
         // `,
         //   },
         // },
-        {
-          type: "standard.Rectangle",
-          size: { width: 10, height: 10 },
-          attrs: {
-            body: {
-              fill: "transparent",
-              stroke: "transparent",
-            },
-          },
-          port: {
-            markup: joint.util.svg/*xml*/ `
-      <g @selector="portBody" magnet="active">
-        <rect 
-          x="0" y="2.5" 
-          width="12" height="20" 
-          fill="url(#portGradient)" 
-        />
-        <rect 
-          x="12" y="0" 
-          width="2.2" height="25" 
-          fill="#808080" 
-        />
-        <rect 
-          x="15" y="0.7" 
-          width="3.5" height="23.5" 
-          fill="white" 
-          stroke="#808080" 
-          stroke-width="1.3" 
-        />
-        <defs>
-          <linearGradient id="portGradient" x1="6" y1="2.5" x2="6" y2="22.5" gradientUnits="userSpaceOnUse">
-            <stop offset="0.00480769" stop-color="#737373"/>
-            <stop offset="0.346154" stop-color="white"/>
-            <stop offset="0.682692" stop-color="white"/>
-            <stop offset="1" stop-color="#737373"/>
-          </linearGradient>
-        </defs>
-      </g>
-    `,
-          },
-        },
         // Output Port (Path)
         {
           type: "standard.Path",
-          size: { width: 30, height: 25 },
+          size: { width: 20, height: 20 },
           markup: util.svg`
     <rect @selector="pipeBody" />
     <rect @selector="pipeEnd" />
@@ -1591,7 +1556,7 @@ const DashboardEditor = () => {
           },
           port: {
             group: "out",
-            size: { width: 30, height: 25 },
+            size: { width: 20, height: 20 },
             attrs: {
               portRoot: {
                 // magnetSelector: "pipeEnd",
@@ -1648,7 +1613,7 @@ const DashboardEditor = () => {
         // Input Port (Pipe)
         {
           type: "standard.Path",
-          size: { width: 30, height: 25 },
+          size: { width: 20, height: 20 },
           markup: util.svg`
       <rect @selector="pipeBody" />
       <rect @selector="pipeEnd" />
@@ -1700,7 +1665,7 @@ const DashboardEditor = () => {
           },
           port: {
             group: "in",
-            size: { width: 30, height: 25 },
+            size: { width: 20, height: 20 },
             attrs: {
               portRoot: {
                 magnetSelector: "pipeEnd",
@@ -1781,7 +1746,7 @@ const DashboardEditor = () => {
         // },
         {
           type: "standard.Path",
-          size: { width: 30, height: 25 },
+          size: { width: 20, height: 20 },
           markup: util.svg`
       <rect @selector="pipeBody" />
       <rect @selector="pipeEnd" />
@@ -1832,7 +1797,7 @@ const DashboardEditor = () => {
           },
           port: {
             group: "out",
-            size: { width: 30, height: 25 },
+            size: { width: 20, height: 20 },
             attrs: {
               portRoot: {
                 magnetSelector: "pipeEnd",
@@ -1893,7 +1858,7 @@ const DashboardEditor = () => {
         // New Vertical Input Port (Pipe)
         {
           type: "standard.Path",
-          size: { width: 30, height: 25 },
+          size: { width: 20, height: 20 },
           markup: util.svg`
       <rect @selector="pipeBody" />
       <rect @selector="pipeEnd" />
@@ -1944,7 +1909,7 @@ const DashboardEditor = () => {
           },
           port: {
             group: "in",
-            size: { width: 30, height: 25 },
+            size: { width: 20, height: 20 },
             attrs: {
               portRoot: {
                 magnetSelector: "pipeEnd",
@@ -2010,23 +1975,23 @@ const DashboardEditor = () => {
               position: { name: "left" }, // Input ports on the left
               attrs: { portBody: { magnet: true } },
               args: { dx: 0, dy: 0 },
-              //     label: {
-              //       position: { name: "inside", args: { offset: 22 } },
-              //       markup: util.svg`
-              //   <text @selector="portLabel" y="0.3em" fill="#333" text-anchor="middle" font-size="15" font-family="sans-serif" />
-              // `,
-              //     },
+              label: {
+                position: { name: "inside", args: { offset: 22 } },
+                markup: util.svg`
+            <text @selector="portLabel" y="0.3em" fill="#333" text-anchor="middle" font-size="15" font-family="sans-serif" />
+          `,
+              },
             },
             out: {
               position: { name: "right" }, // Output ports on the right
               attrs: { portBody: { magnet: true } },
               args: { dx: 0, dy: 0 },
-              //     label: {
-              //       position: { name: "inside", args: { offset: 22 } },
-              //       markup: util.svg`
-              //   <text @selector="portLabel" y="0.3em" fill="#333" text-anchor="middle" font-size="15" font-family="sans-serif" />
-              // `,
-              //     },
+              label: {
+                position: { name: "inside", args: { offset: 22 } },
+                markup: util.svg`
+            <text @selector="portLabel" y="0.3em" fill="#333" text-anchor="middle" font-size="15" font-family="sans-serif" />
+          `,
+              },
             },
           },
           items: [
@@ -2287,23 +2252,23 @@ const DashboardEditor = () => {
 
       // graph.addCell(templateImage);
 
-      // const templateImage01 = new TemplateImage({
-      //   svg: HeatPumpSVG,
-      //   attrs: {},
-      // });
-      // const [ti1] = addImages(templateImage01, 220);
-      // ti1.set("color", "red");
+      const templateImage01 = new TemplateImage({
+        svg: HeatPumpSVG,
+        attrs: {},
+      });
+      const [ti1] = addImages(templateImage01, 220);
+      ti1.set("color", "red");
 
-      // function addImages(image, x = 0, y = 20) {
-      //   const images = [
-      //     image
-      //       .clone()
-      //       .resize(250, 250)
-      //       .position(x, y + 230),
-      //   ];
-      //   graph.addCells(images);
-      //   return images;
-      // }
+      function addImages(image, x = 0, y = 20) {
+        const images = [
+          image
+            .clone()
+            .resize(250, 250)
+            .position(x, y + 230),
+        ];
+        graph.addCells(images);
+        return images;
+      }
 
       const svgMarkup = {
         tagName: "svg",
@@ -2727,21 +2692,9 @@ const DashboardEditor = () => {
     }
   }, [selectedValue]);
 
-  // const handleLabelChange = (value) => {
-  //   if (selectedCell) {
-  //     selectedCell.attr("label/text", value);
-  //   }
-  // };
-
   const handleLabelChange = (value) => {
     if (selectedCell) {
-      const currentAttrs = selectedCell.get("attrs") || {};
-      selectedCell.set("attrs", {
-        ...currentAttrs,
-        label: { ...currentAttrs.label, text: value },
-      });
-      console.log("Label updated:", value);
-      setUpdateKey((prev) => prev + 1);
+      selectedCell.attr("label/text", value);
     }
   };
 
