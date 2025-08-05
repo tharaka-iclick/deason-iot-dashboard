@@ -685,7 +685,7 @@ const handleSave = async () => {
       }
     };
 
-    await uploadString(fileRef, json, "raw", metadata);
+
     
     console.log("Successfully saved to Firebase");
     setCurrentCmdId(getLastCmdId(commandManagerRef.current));

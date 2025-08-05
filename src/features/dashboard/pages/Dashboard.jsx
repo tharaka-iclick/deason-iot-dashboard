@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
-import { useNavigate } from "react-router-dom";
-import { getStorage, ref, listAll, getDownloadURL, getMetadata,auth } from "../../../../services/firebase/config";
-
+import { Activity, Thermometer, Droplets, Zap } from "lucide-react";
+import { updateMetrics, updateSensorData } from "../store/dashboardSlice";
 import {
   Box,
   Table,
@@ -20,87 +19,122 @@ import {
   Alert,
   Typography,
   CircularProgress,
-  Card,
-  CardContent,
-  Grid
 } from "@mui/material";
-import { Activity, Thermometer, Droplets, Zap } from "lucide-react";
 import EditIcon from "@mui/icons-material/Edit";
 import DownloadIcon from "@mui/icons-material/Download";
 import AddIcon from "@mui/icons-material/Add";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { updateMetrics, updateSensorData } from "../store/dashboardSlice";
+import { useNavigate } from "react-router-dom";
+import { getStorage, ref, listAll, getDownloadURL, deleteObject } from "firebase/storage";
+import { storage } from "./../../../services/firebase/config"; 
 
 export const Dashboard = () => {
   const dispatch = useDispatch();
-  const navigate = useNavigate();
   const { devices } = useSelector((state) => state.devices);
   const { metrics, sensorData } = useSelector((state) => state.dashboard);
-  
-  const [files, setFiles] = useState([]);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(5);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [files, setFiles] = useState([]);
+  const navigate = useNavigate();
+
+  const userId = "6767698asd87"; // This should come from your auth system
+  const storagePath = `diagrams/${userId}/`;
 
   useEffect(() => {
-    const fetchUserFiles = async () => {
+    const fetchFiles = async () => {
       try {
-        const user = auth.currentUser;
-        if (!user) {
-          setError("User not authenticated");
-          setLoading(false);
-          return;
-        }
-
-        const storageRef = ref(getStorage(), `users/${user.uid}/diagrams/`);
+        const storageRef = ref(storage, storagePath);
         const result = await listAll(storageRef);
         
-        const filesData = await Promise.all(
-          result.items.map(async (item) => {
-            const [url, metadata] = await Promise.all([
-              getDownloadURL(item),
-              getMetadata(item)
-            ]);
-            
-            return {
-              id: item.name,
-              name: item.name.replace('.joint', ''),
-              downloadUrl: url,
-              createdAt: new Date(metadata.timeCreated).toLocaleString(),
-              size: (metadata.size / 1024).toFixed(2) + ' KB',
-              ...metadata.customMetadata
-            };
-          })
-        );
+        const filePromises = result.items.map(async (item) => {
+          const url = await getDownloadURL(item);
+          return {
+            id: item.name,
+            name: item.name,
+            fullPath: item.fullPath,
+            url,
+            createdTime: new Date().toISOString(), // You might want to use metadata instead
+          };
+        });
 
-        setFiles(filesData);
+        const fileList = await Promise.all(filePromises);
+        setFiles(fileList);
+        setLoading(false);
         setLastUpdated(new Date().toLocaleString());
-        setLoading(false);
       } catch (err) {
-        console.error("Error fetching files:", err);
-        setError("Failed to load files");
+        setError("Failed to fetch files");
         setLoading(false);
+        console.error(err);
       }
     };
 
-    fetchUserFiles();
+    fetchFiles();
+  }, [storagePath]);
 
-    // Calculate device metrics
+  const handleSearchChange = (event) => {
+    setSearch(event.target.value);
+    setPage(0);
+  };
+
+  const handleChangePage = (_, newPage) => {
+    setPage(newPage);
+  };
+
+  const handleChangeRowsPerPage = (event) => {
+    setRowsPerPage(+event.target.value);
+    setPage(0);
+  };
+
+  const handleDeleteFile = async (fileId) => {
+    try {
+      const fileRef = ref(storage, `${storagePath}${fileId}`);
+      await deleteObject(fileRef);
+      setFiles(files.filter(file => file.id !== fileId));
+    } catch (err) {
+      setError("Failed to delete file");
+      console.error(err);
+    }
+  };
+
+  const handleDownload = async (fileUrl, fileName) => {
+    try {
+      const response = await fetch(fileUrl);
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      setError("Failed to download file");
+      console.error(err);
+    }
+  };
+
+  const filteredRows = files.filter(
+    (row) =>
+      row.name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  useEffect(() => {
     const totalDevices = devices.length;
-    const activeDevices = devices.filter(d => d.status === "online").length;
+    const activeDevices = devices.filter((d) => d.status === "online").length;
     const offlineDevices = totalDevices - activeDevices;
 
-    dispatch(updateMetrics({
-      totalDevices,
-      activeDevices,
-      offlineDevices,
-      alerts: Math.floor(Math.random() * 5)
-    }));
+    dispatch(
+      updateMetrics({
+        totalDevices,
+        activeDevices,
+        offlineDevices,
+        alerts: Math.floor(Math.random() * 5),
+      })
+    );
 
-    // Generate mock sensor data
     const mockData = Array.from({ length: 24 }, (_, i) => ({
       time: `${i}:00`,
       temperature: 20 + Math.random() * 10,
@@ -112,187 +146,125 @@ export const Dashboard = () => {
   }, [devices, dispatch]);
 
   const metricCards = [
-    { icon: Activity, label: "Total Devices", value: metrics.totalDevices, color: "primary.main" },
-    { icon: Thermometer, label: "Active Devices", value: metrics.activeDevices, color: "success.main" },
-    { icon: Droplets, label: "Offline Devices", value: metrics.offlineDevices, color: "error.main" },
-    { icon: Zap, label: "Alerts", value: metrics.alerts, color: "warning.main" },
+    {
+      icon: Activity,
+      label: "Total Devices",
+      value: metrics.totalDevices,
+      color: "blue",
+    },
+    {
+      icon: Thermometer,
+      label: "Active Devices",
+      value: metrics.activeDevices,
+      color: "green",
+    },
+    {
+      icon: Droplets,
+      label: "Offline Devices",
+      value: metrics.offlineDevices,
+      color: "red",
+    },
+    { icon: Zap, label: "Alerts", value: metrics.alerts, color: "orange" },
   ];
 
-  const filteredFiles = files.filter(file => 
-    file.name.toLowerCase().includes(search.toLowerCase()) ||
-    (file.title && file.title.toLowerCase().includes(search.toLowerCase()))
-  );
-
-  const handleChangePage = (_, newPage) => setPage(newPage);
-  const handleChangeRowsPerPage = (e) => {
-    setRowsPerPage(+e.target.value);
-    setPage(0);
-  };
-  const handleSearchChange = (e) => {
-    setSearch(e.target.value);
-    setPage(0);
+  const handleAddClick = () => {
+    navigate("/dashboard/edit");
   };
 
-  const handleDownload = (url, filename) => {
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const handleEdit = (fileId) => {
-    navigate(`/dashboard/edit/${encodeURIComponent(fileId)}`);
-  };
-
-  const handleNewDiagram = () => {
-    navigate("/dashboard/new");
+  const handleEditClick = (fileId) => {
+    navigate(`/dashboard/edit/${fileId}`);
   };
 
   return (
-    <Box sx={{ p: 3 }}>
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-
-      <Typography variant="h4" gutterBottom>Dashboard</Typography>
-      <Typography variant="subtitle1" color="text.secondary" gutterBottom>
-        Last Updated: {lastUpdated || "Never"}
-      </Typography>
-
-      <Grid container spacing={3} sx={{ mb: 3 }}>
-        {metricCards.map((metric, index) => (
-          <Grid item xs={12} sm={6} md={3} key={index}>
-            <Card sx={{ bgcolor: metric.color, color: 'common.white' }}>
-              <CardContent>
-                <Box display="flex" alignItems="center">
-                  <metric.icon size={32} style={{ marginRight: 16 }} />
-                  <Box>
-                    <Typography variant="h5">{metric.value}</Typography>
-                    <Typography variant="body2">{metric.label}</Typography>
-                  </Box>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-        ))}
-      </Grid>
-
-      <Grid container spacing={3} sx={{ mb: 3 }}>
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>Temperature & Humidity</Typography>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={sensorData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="time" />
-                  <YAxis />
-                  <Tooltip />
-                  <Line type="monotone" dataKey="temperature" stroke="#8884d8" name="Temperature (°C)" />
-                  <Line type="monotone" dataKey="humidity" stroke="#82ca9d" name="Humidity (%)" />
-                </LineChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>Power Consumption</Typography>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={sensorData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="time" />
-                  <YAxis />
-                  <Tooltip />
-                  <Line type="monotone" dataKey="power" stroke="#ffc658" name="Power (W)" />
-                </LineChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-
-      <Card>
-        <CardContent>
-          <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
-            <TextField
-              label="Search Files"
-              variant="outlined"
-              size="small"
-              value={search}
-              onChange={handleSearchChange}
-              sx={{ width: 300 }}
-            />
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={handleNewDiagram}
+    <div className="dashboard">
+      <Box>
+        {error && <Alert severity="error">{error}</Alert>}
+        <Typography variant="h5" gutterBottom>
+          Dashboard
+        </Typography>
+        <Typography variant="subtitle1" color="textSecondary" gutterBottom>
+          Last Updated: {lastUpdated || "Never"}
+        </Typography>
+        {loading ? (
+          <Box display="flex" justifyContent="center" padding={2}>
+            <CircularProgress />
+          </Box>
+        ) : (
+          <Paper sx={{ padding: 2 }}>
+            <Stack
+              direction="row"
+              justifyContent="space-between"
+              alignItems="center"
+              mb={2}
             >
-              New Diagram
-            </Button>
-          </Stack>
+              <TextField
+                label="Search"
+                variant="outlined"
+                size="small"
+                value={search}
+                onChange={handleSearchChange}
+              />
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={handleAddClick}
+              >
+                Add
+              </Button>
+            </Stack>
 
-          <TableContainer>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Name</TableCell>
-                  <TableCell>Created</TableCell>
-                  <TableCell>Size</TableCell>
-                  <TableCell align="center">Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {loading ? (
+            <TableContainer>
+              <Table>
+                <TableHead>
                   <TableRow>
-                    <TableCell colSpan={4} align="center">
-                      <CircularProgress size={24} />
-                    </TableCell>
+                    <TableCell>Created Time</TableCell>
+                    <TableCell>File Name</TableCell>
+                    <TableCell align="center">Actions</TableCell>
                   </TableRow>
-                ) : filteredFiles.length > 0 ? (
-                  filteredFiles
+                </TableHead>
+
+                <TableBody>
+                  {filteredRows
                     .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                    .map((file) => (
-                      <TableRow key={file.id} hover>
-                        <TableCell>{file.name}</TableCell>
-                        <TableCell>{file.createdAt}</TableCell>
-                        <TableCell>{file.size}</TableCell>
+                    .map((row) => (
+                      <TableRow key={row.id}>
+                        <TableCell>{new Date(row.createdTime).toLocaleString()}</TableCell>
+                        <TableCell>{row.name}</TableCell>
                         <TableCell align="center">
-                          <IconButton onClick={() => handleEdit(file.id)} color="primary">
+                          <IconButton onClick={() => handleEditClick(row.id)}>
                             <EditIcon />
                           </IconButton>
-                          <IconButton 
-                            onClick={() => handleDownload(file.downloadUrl, file.name)}
-                            color="secondary"
+                          <IconButton
+                            onClick={() => handleDownload(row.url, row.name)}
                           >
                             <DownloadIcon />
                           </IconButton>
                         </TableCell>
                       </TableRow>
-                    ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={4} align="center">
-                      {search ? "No matching files found" : "No files uploaded yet"}
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                    ))}
+                  {filteredRows.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={3} align="center">
+                        No files found
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
 
-          <TablePagination
-            rowsPerPageOptions={[5, 10, 25]}
-            component="div"
-            count={filteredFiles.length}
-            page={page}
-            onPageChange={handleChangePage}
-            rowsPerPage={rowsPerPage}
-            onRowsPerPageChange={handleChangeRowsPerPage}
-          />
-        </CardContent>
-      </Card>
-    </Box>
+            <TablePagination
+              component="div"
+              count={filteredRows.length}
+              page={page}
+              onPageChange={handleChangePage}
+              rowsPerPage={rowsPerPage}
+              onRowsPerPageChange={handleChangeRowsPerPage}
+              rowsPerPageOptions={[5, 10, 25]}
+            />
+          </Paper>
+        )}
+      </Box>
+    </div>
   );
 };
