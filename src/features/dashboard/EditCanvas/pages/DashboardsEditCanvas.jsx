@@ -34,7 +34,11 @@ import ACFan from "../../../WidgetSVG/ACFan";
 import {
   listenForDeviceModels,
   listenForDevices,
+  getDeviceModels,
+  getDevice,
+  getDevicePayload,
   listenForDevicePayload,
+  listenForSensoreData,
 } from "../../../../../src/services/firebase/dataService";
 import {
   getStorage,
@@ -42,7 +46,7 @@ import {
   uploadString,
   getDownloadURL,
 } from "firebase/storage";
-
+import { isEqual } from 'lodash';
 class TemplateImage extends joint.dia.Element {
 defaults() {
     return {
@@ -232,14 +236,30 @@ const DashboardEditor = () => {
     if (!cell || !data) return;
 
     const payload = data || {};
-    const value = payload[selectedValue];
+   // const value = payload[selectedValue];
 
     console.log("payload01", data);
-
-    if (typeof value !== "undefined") {
+ console.log("asas selectedEUI", selectedEUI);
+  console.log("asas selectedDevice", selectedDevice);
+    console.log("asas selectedValue", selectedValue);
+ const unsubscribe = listenForSensoreData(selectedEUI, selectedDevice,selectedValue, (value) => {
+         if (typeof value !== "undefined") {
       const modelName = selectedValue || "Device";
       cell.attr("label/text", `${modelName}: ${value}`);
- console.log("value2", value);
+      console.log("value2", value);
+
+                if (value=="open") {
+           selectedCell.rotate();
+               const imageEl = document.querySelector(`[model-id="${selectedCell.id}"] image`);
+    if (imageEl) {
+      imageEl.style.animationDuration = `${2 / animationSpeed}s`;
+    }}
+     else {
+   if (selectedCell) {
+  // selectedCell.stopAnimation();
+    }
+   
+      }
       if (typeof value === "number") {
         const range = deviceModels[cell.prop("custom/deviceModel")]?.range || [
           0, 100,
@@ -251,21 +271,16 @@ const DashboardEditor = () => {
             console.log("normalizedValue", normalizedValue);
         const hue = (1 - normalizedValue) * 120; // Green (0) to Red (120)
         cell.attr("body/fill", `hsl(${hue}, 100%, 80%)`);
-          if (value> 0.8) {
-           selectedCell.rotate();
-               const imageEl = document.querySelector(`[model-id="${selectedCell.id}"] image`);
-    if (imageEl) {
-      imageEl.style.animationDuration = `${2 / animationSpeed}s`;
-    }}
-     else {
-           selectedCell.stopAnimation  () ;
-   
-      }
+
       } else {
         cell.attr("body/fill", "#e0e0e0");
    
       }
     }
+     
+      });
+      
+   unsubscribe();
   };
   const subscribeCellToDevice = (cell, eui, deviceId, deviceModel) => {
     const cellId = getCellId(cell);
@@ -276,7 +291,10 @@ const DashboardEditor = () => {
     }
 
     if (eui && deviceId) {
-      const unsubscribe = listenForDevicePayload(eui, deviceId, (data) => {
+  const fetchDevicePayload = async () => {
+    if (eui && deviceId) {
+      try {
+        const data = await getDevicePayload(eui, deviceId);
         console.log(`Device data for cell ${cellId}:`, data);
         cellDeviceData.current.set(cellId, data);
         setPayload(data);
@@ -285,15 +303,23 @@ const DashboardEditor = () => {
         if (payloadKeys.length > 0) {
           setAvailableValues(payloadKeys);
           console.log("payloadKeys", payloadKeys);
-
+  console.log("selectedValuew", selectedValue);
           if (!selectedValue || !payloadKeys.includes(selectedValue)) {
             setSelectedValue(payloadKeys);
           }
         }
-        updateCellDisplay(cell, data);
-      });
+        //updateCellDisplay(cell, data);
+        // Do something with the payload
+      } catch (error) {
+        console.error("Error fetching device payload:", error);
+      }
+    }
+  };
+       fetchDevicePayload();
+       
+ 
 
-      deviceSubscriptions.current.set(cellId, unsubscribe);
+     // deviceSubscriptions.current.set(cellId, unsubscribe);
 
       cell.prop("custom/deviceEUI", eui);
       cell.prop("custom/deviceID", deviceId);
@@ -308,36 +334,46 @@ const DashboardEditor = () => {
     cellDeviceData.current.delete(cellId);
   };
 
-  useEffect(() => {
-    const unsubscribe = listenForDeviceModels((models) => {
+
+  
+
+
+
+useEffect(() => {
+  const fetchDeviceModels = async () => {
+    try {
+      const models = await getDeviceModels();
       console.log("Fetched device models:", models);
       setDeviceModels(models);
-      console.log("models", models);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    const unsubscribe = listenForDeviceModels((devices) => {
-      const euis = Object.keys(devices);
+      const euis = Object.keys(models);
       console.log("Fetched EUIs:", euis);
       setDeviceEUIs(euis);
-    });
-    return () => unsubscribe();
-  }, []);
+    } catch (error) {
+      console.error("Error fetching device models:", error);
+    }
+  };
 
-  useEffect(() => {
+  fetchDeviceModels();
+}, []);
+
+useEffect(() => {
+  const fetchDevice = async () => {
     if (selectedEUI) {
-      console.log("Fetching Devices for EUI:", selectedEUI);
-      const unsubscribe = listenForDevices(selectedEUI, (devices) => {
-        console.log("Fetched Devices:", devices);
-        setDevices(devices);
-      });
-      return () => unsubscribe();
+      try {
+        console.log("Fetching Devices for EUI:", selectedEUI);
+        const newdevices = await getDevice(selectedEUI);
+        console.log("Fetched Devices:", newdevices);
+        setDevices(newdevices);
+      } catch (error) {
+        console.error("Error fetching device:", error);
+      }
     } else {
       setDevices({});
     }
-  }, [selectedEUI]);
+  };
+
+  fetchDevice();
+}, [selectedEUI]);
 
   const logsContainerRef = useRef(null);
   const lastViewRef = useRef(null);
@@ -2118,7 +2154,7 @@ const DashboardEditor = () => {
       const cellId = getCellId(selectedCell);
       const data = cellDeviceData.current.get(cellId);
       if (data) {
-        updateCellDisplay(selectedCell, data);
+      //  updateCellDisplay(selectedCell, data);
       }
     }
   };
@@ -2365,8 +2401,24 @@ const DashboardEditor = () => {
                     ))}
                   </Select>
                 </FormControl>
-
-                {selectedDevice && Object.keys(payload).length > 0 && (
+{selectedDevice && Object.keys(payload).length > 0 && (
+  <FormControl component="fieldset" fullWidth>
+    <Typography variant="subtitle2">Display Value:</Typography>
+    <Select
+      value={selectedValue}
+      onChange={handleValueChange}
+      size="small"
+      displayEmpty
+    >
+      {availableValues.map((value) => (
+        <MenuItem key={value} value={value}>
+          {value}
+        </MenuItem>
+      ))}
+    </Select>
+  </FormControl>
+)}
+                {/* {selectedDevice && Object.keys(payload).length > 0 && (
                   <FormControl component="fieldset">
                     <Typography variant="subtitle2">Display Value:</Typography>
                     <RadioGroup
@@ -2383,7 +2435,7 @@ const DashboardEditor = () => {
                       ))}
                     </RadioGroup>
                   </FormControl>
-                )}
+                )} */}
 
                 <Box className="animation-controls">
                   <Typography variant="subtitle2">Animation Controls</Typography>
