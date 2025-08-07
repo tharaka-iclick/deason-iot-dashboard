@@ -29,6 +29,8 @@ import CoolingPlate from "../../../WidgetSVG/CoolingPlate";
 import VatAgitator from "../../../WidgetSVG/VatAgitator";
 import Chille from "../../../WidgetSVG/Chiller";
 import IceBank from "../../../WidgetSVG/IceBank";
+import ACFan from "../../../WidgetSVG/ACFan";
+
 import {
   listenForDeviceModels,
   listenForDevices,
@@ -42,7 +44,7 @@ import {
 } from "firebase/storage";
 
 class TemplateImage extends joint.dia.Element {
-  defaults() {
+defaults() {
     return {
       ...super.defaults,
       type: "TemplateImage",
@@ -50,6 +52,8 @@ class TemplateImage extends joint.dia.Element {
         image: {
           width: "calc(w)",
           height: "calc(h)",
+          'data-animated': false,
+          'class': ''
         },
         label: {
           textVerticalAnchor: "top",
@@ -76,6 +80,7 @@ class TemplateImage extends joint.dia.Element {
     this.setImageColor();
   }
 
+
   setImageColor() {
     const svg = this.get("svg") || "";
     const color = this.get("color") || "red";
@@ -83,6 +88,58 @@ class TemplateImage extends joint.dia.Element {
       "image/href",
       this.dataURLPrefix + encodeURIComponent(svg.replace(/\$color/g, color))
     );
+  }
+    startAnimation(type = 'pulse') {
+    this.attr('image/data-animated', true);
+    this.attr('image/class', type);
+    this.trigger('animation:start');
+    return this;
+  }
+
+  stopAnimation() {
+    this.attr('image/data-animated', false);
+    this.attr('image/class', '');
+    this.trigger('animation:stop');
+    return this;
+  }
+    pulse() {
+    return this.startAnimation('pulse');
+  }
+
+  rotate() {
+    return this.startAnimation('rotate');
+  }
+
+  flowAnimation() {
+    this.transition('attrs/image/x', 10, {
+      delay: 0,
+      duration: 1000,
+      valueFunction: joint.util.interpolate.number(0, 10),
+      timingFunction: joint.util.timing.linear
+    });
+    
+    this.transition('attrs/image/y', 10, {
+      delay: 1000,
+      duration: 1000,
+      valueFunction: joint.util.interpolate.number(0, 10),
+      timingFunction: joint.util.timing.linear
+    });
+    
+    this.transition('attrs/image/x', 0, {
+      delay: 2000,
+      duration: 1000,
+      valueFunction: joint.util.interpolate.number(10, 0),
+      timingFunction: joint.util.timing.linear
+    });
+    
+    this.transition('attrs/image/y', 0, {
+      delay: 3000,
+      duration: 1000,
+      valueFunction: joint.util.interpolate.number(10, 0),
+      timingFunction: joint.util.timing.linear
+    });
+    
+    return this;
   }
 }
 
@@ -113,7 +170,52 @@ const DashboardEditor = () => {
   const [selectedValue, setSelectedValue] = useState("");
   const [availableValues, setAvailableValues] = useState([]);
   const [payload, setPayload] = useState({});
+  const [animationType, setAnimationType] = useState("pulse");
+  const [animationSpeed, setAnimationSpeed] = useState(1);
 
+  const handleStartAnimation = () => {
+    if (!selectedCell) return;
+    
+    switch(animationType) {
+      case 'pulse':
+        selectedCell.pulse();
+        break;
+      case 'rotate':
+        selectedCell.rotate();
+        break;
+      case 'flow':
+        selectedCell.flowAnimation();
+        break;
+      default:
+        selectedCell.startAnimation(animationType);
+    }
+        const imageEl = document.querySelector(`[model-id="${selectedCell.id}"] image`);
+    if (imageEl) {
+      imageEl.style.animationDuration = `${2 / animationSpeed}s`;
+    }
+  };
+
+  const handleAnimationSpeedChange = (event) => {
+    const speed = parseFloat(event.target.value);
+    setAnimationSpeed(speed);
+    
+    if (selectedCell && selectedCell.attr('image/data-animated')) {
+      const imageEl = document.querySelector(`[model-id="${selectedCell.id}"] image`);
+      if (imageEl) {
+        imageEl.style.animationDuration = `${2 / speed}s`;
+      }
+    }
+  };
+
+    const handleStopAnimation = () => {
+    if (selectedCell) {
+      selectedCell.stopAnimation();
+    }
+  };
+
+  const handleAnimationTypeChange = (event) => {
+    setAnimationType(event.target.value);
+  };
   const formatKey = (key) => {
     return key
       .split("_")
@@ -137,7 +239,7 @@ const DashboardEditor = () => {
     if (typeof value !== "undefined") {
       const modelName = selectedValue || "Device";
       cell.attr("label/text", `${modelName}: ${value}`);
-
+ console.log("value2", value);
       if (typeof value === "number") {
         const range = deviceModels[cell.prop("custom/deviceModel")]?.range || [
           0, 100,
@@ -146,14 +248,25 @@ const DashboardEditor = () => {
           Math.max((value - range[0]) / (range[1] - range[0]), 0),
           1
         );
-        const hue = (1 - normalizedValue) * 120;
+            console.log("normalizedValue", normalizedValue);
+        const hue = (1 - normalizedValue) * 120; // Green (0) to Red (120)
         cell.attr("body/fill", `hsl(${hue}, 100%, 80%)`);
+          if (value> 0.8) {
+           selectedCell.rotate();
+               const imageEl = document.querySelector(`[model-id="${selectedCell.id}"] image`);
+    if (imageEl) {
+      imageEl.style.animationDuration = `${2 / animationSpeed}s`;
+    }}
+     else {
+           selectedCell.stopAnimation  () ;
+   
+      }
       } else {
         cell.attr("body/fill", "#e0e0e0");
+   
       }
     }
   };
-
   const subscribeCellToDevice = (cell, eui, deviceId, deviceModel) => {
     const cellId = getCellId(cell);
 
@@ -187,7 +300,6 @@ const DashboardEditor = () => {
       cell.prop("custom/deviceModel", deviceModel);
     }
   };
-
   const unsubscribeCellFromDevice = (cellId) => {
     if (deviceSubscriptions.current.has(cellId)) {
       deviceSubscriptions.current.get(cellId)();
@@ -708,7 +820,64 @@ const DashboardEditor = () => {
       stencilContainerRef.current.appendChild(stencil.el);
       stencil.render();
 
+      const rect = new joint.shapes.standard.Rectangle({
+        position: { x: 100, y: 100 },
+        size: { width: 100, height: 50 },
+        attrs: {
+          body: { fill: "#ffffff", stroke: "#000000" },
+          label: { text: "Text", fill: "#000000" },
+        },
+        custom: {
+          description: "A sample rectangle",
+          color: "#ffffff",
+        },
+      });
+
+      const el = new shapes.standard.Rectangle({
+        position: { x: 40, y: 40 },
+        size: { width: 120, height: 60 },
+        furnitureType: "",
+        attrs: {
+          body: {
+            stroke: "#ed2637",
+            fill: "#ed2637",
+            fillOpacity: 0.2,
+          },
+          label: {
+            text: "Select furniture",
+            fontFamily: "sans-serif",
+          },
+        },
+      });
+
       const stencilElements = [
+            {
+      type: "custom.TemplateImage",
+      svg: MotorPumpSVG,
+      size: { width: 80, height: 60 },
+      cloneSize: { width: 200, height: 200 },
+      attrs: {
+        image: {
+          'data-animated': false,
+          'class': ''
+        }
+      },
+      contextMenu: [
+        {
+          content: 'Pulse Animation',
+          action: (cellView) => cellView.model.pulse()
+        },
+        {
+          content: 'Rotate Animation',
+          action: (cellView) => cellView.model.rotate()
+        },
+        '-',
+        {
+          content: 'Stop Animation',
+          action: (cellView) => cellView.model.stopAnimation()
+        }
+      ]
+    },
         {
           type: "standard.Rectangle",
           size: { width: 100, height: 60 },
@@ -796,6 +965,13 @@ const DashboardEditor = () => {
           cloneSize: { width: 250, height: 200 },
           attrs: {},
         },
+             {
+          type: "custom.TemplateImage",
+          svg: ACFan,
+          size: { width: 80, height: 60 },
+          cloneSize: { width: 250, height: 200 },
+          attrs: {},
+        },
       ];
 
       const stencilPorts = [
@@ -809,7 +985,8 @@ const DashboardEditor = () => {
             },
           },
           port: {
-            markup: joint.util.svg`<g @selector="portBody" magnet="active">
+            markup: joint.util.svg/*xml*/ `
+      <g @selector="portBody" magnet="active">
         <rect 
           x="0" y="2.5" 
           width="12" height="20" 
@@ -835,14 +1012,17 @@ const DashboardEditor = () => {
             <stop offset="1" stop-color="#737373"/>
           </linearGradient>
         </defs>
-      </g>`,
+      </g>
+     `,
           },
         },
         {
           type: "standard.Path",
           size: { width: 30, height: 25 },
-          markup: util.svg`<rect @selector="pipeBody" />
-    <rect @selector="pipeEnd" />`,
+          markup: util.svg`
+      <rect @selector="pipeBody" />
+      <rect @selector="pipeEnd" />
+     `,
           attrs: {
             portRoot: {
               magnetSelector: "pipeEnd",
@@ -935,15 +1115,19 @@ const DashboardEditor = () => {
                 textAnchor: "middle",
               },
             },
-            markup: util.svg`<rect @selector="pipeBody" magnet="active" port-group="out"/>
-      <rect @selector="pipeEnd" x="-12"/>`,
+            markup: util.svg`
+      <rect @selector="pipeBody" magnet="active" port-group="out"/>
+      <rect @selector="pipeEnd" x="-12"/>
+      `,
           },
         },
         {
           type: "standard.Path",
           size: { width: 30, height: 25 },
-          markup: util.svg`<rect @selector="pipeBody" />
-      <rect @selector="pipeEnd" />`,
+          markup: util.svg`
+      <rect @selector="pipeBody" />
+      <rect @selector="pipeEnd" />
+      `,
           attrs: {
             portRoot: {
               magnetSelector: "pipeEnd",
@@ -967,6 +1151,7 @@ const DashboardEditor = () => {
                   y2: "100%",
                 },
               },
+
               filter: {
                 name: "dropShadow",
                 args: { dx: 1, dy: 1, blur: 2, color: "rgba(0,0,0,0.3)" },
@@ -1039,15 +1224,19 @@ const DashboardEditor = () => {
               fontFamily: "Roboto, sans-serif",
               pointerEvents: "none",
             },
-            markup: util.svg`<rect @selector="pipeBody"  magnet="passive" port-group="in" />
-          <rect @selector="pipeEnd" />`,
+            markup: util.svg`
+          <rect @selector="pipeBody"  magnet="passive" port-group="in" />
+          <rect @selector="pipeEnd" />
+        `,
           },
         },
         {
           type: "standard.Path",
           size: { width: 30, height: 25 },
-          markup: util.svg`<rect @selector="pipeBody" />
-      <rect @selector="pipeEnd" />`,
+          markup: util.svg`
+      <rect @selector="pipeBody" />
+      <rect @selector="pipeEnd" />
+     `,
           attrs: {
             portRoot: {
               magnetSelector: "pipeEnd",
@@ -1146,15 +1335,19 @@ const DashboardEditor = () => {
               fontFamily: "Roboto, sans-serif",
               pointerEvents: "none",
             },
-            markup: util.svg`<rect @selector="pipeBody"  magnet="active" port-group="out" />
-        <rect @selector="pipeEnd" />`,
+            markup: util.svg`
+        <rect @selector="pipeBody"  magnet="active" port-group="out" />
+        <rect @selector="pipeEnd" />
+      `,
           },
         },
         {
           type: "standard.Path",
           size: { width: 30, height: 25 },
-          markup: util.svg`<rect @selector="pipeBody" />
-      <rect @selector="pipeEnd" />`,
+          markup: util.svg`
+      <rect @selector="pipeBody" />
+      <rect @selector="pipeEnd" />
+     `,
           attrs: {
             portRoot: {
               magnetSelector: "pipeEnd",
@@ -1252,8 +1445,10 @@ const DashboardEditor = () => {
               fontFamily: "Roboto, sans-serif",
               pointerEvents: "none",
             },
-            markup: util.svg`<rect @selector="pipeBody"  magnet="passive" port-group="in" />
-        <rect @selector="pipeEnd" />`,
+            markup: util.svg`
+        <rect @selector="pipeBody"  magnet="passive" port-group="in" />
+        <rect @selector="pipeEnd" />
+      `,
           },
         },
       ];
@@ -1272,7 +1467,8 @@ const DashboardEditor = () => {
               args: { dx: 0, dy: 0 },
             },
           },
-          items: [],
+          items: [
+          ],
         };
       });
 
@@ -1336,6 +1532,177 @@ const DashboardEditor = () => {
             stencil.cancelDrag({ dropAnimation: true });
           }
           highlighters.mask.removeAll(paper, "valid-drop-target");
+        },
+      });
+
+      const templateImage = new TemplateImage({
+        svg: MotorPumpSVG,
+        position: { x: 100, y: 100 },
+        size: { width: 200, height: 200 },
+        attrs: {},
+        portMarkup: [
+          {
+            tagName: "path",
+            selector: "portBody",
+            attributes: {
+              fill: "#FFFFFF",
+              stroke: "#333333",
+              "stroke-width": 2,
+            },
+          },
+        ],
+
+        ports: {
+          groups: {
+            in: {
+              position: {
+                name: "line",
+                args: {
+                  start: { x: "calc(w)", y: "calc(h/2 + 80)" },
+                  end: { x: "calc(w)", y: 40 },
+                },
+              },
+              markup: util.svg`
+                            <rect @selector="pipeBody"   x="-12"
+                    y="-12"
+                    width="24"
+                    height="24"
+                    fill="#ff9580"
+                    stroke="#333333"
+                    stroke-width="2"
+                    magnet="active"/>
+                            <rect @selector="pipeEnd" />
+                        `,
+              size: { width: 30, height: 30 },
+              z: -1,
+              attrs: {
+                portRoot: {
+                  magnet: "active",
+                },
+                portLabelBackground: {
+                  ref: "portLabel",
+                  fill: "#FFFFFF",
+                  fillOpacity: 0.7,
+                  x: "calc(x - 2)",
+                  y: "calc(y - 2)",
+                  width: "calc(w + 4)",
+                  height: "calc(h + 4)",
+                  pointerEvents: "none",
+                },
+                pipeBody: {
+                  width: "calc(w)",
+                  height: "calc(h)",
+                  y: "calc(h / -2)",
+                  x: "calc(-1 * w)",
+                  fill: {
+                    type: "linearGradient",
+                    stops: [
+                      { offset: "0%", color: "gray" },
+                      { offset: "30%", color: "white" },
+                      { offset: "70%", color: "white" },
+                      { offset: "100%", color: "gray" },
+                    ],
+                    attrs: {
+                      x1: "0%",
+                      y1: "0%",
+                      x2: "0%",
+                      y2: "100%",
+                    },
+                  },
+                },
+                pipeEnd: {
+                  width: 10,
+                  height: "calc(h+6)",
+                  y: "calc(h / -2 - 3)",
+                  x: "calc(w -40)",
+                  stroke: "gray",
+                  strokeWidth: 3,
+                  fill: "white",
+                },
+                portLabel: { fontFamily: "sans-serif", pointerEvents: "none" },
+                portBody: {
+                  d: "M 0 -calc(0.5 * h) h calc(w) l 3 calc(0.5 * h) l -3 calc(0.5 * h) H 0 A calc(0.5 * h) calc(0.5 * h) 1 1 1 0 -calc(0.5 * h) Z",
+                  magnet: "active",
+                },
+              },
+            },
+            out: {
+              position: {
+                name: "line",
+                args: {
+                  start: { x: "calc(w)", y: "calc(h/2)" },
+                  end: { x: "calc(w)", y: 40 },
+                },
+              },
+              size: { width: 30, height: 30 },
+              markup: util.svg`
+                             <g @selector="portBodyGroup" transform="rotate(180)">
+      <rect @selector="pipeBody" />
+      <rect @selector="pipeEnd" />
+      </g>
+                        `,
+              z: 1,
+              attrs: {
+                portRoot: {
+                  magnet: "active",
+                },
+                portLabelBackground: {
+                  ref: "portLabel",
+                  fill: "#FFFFFF",
+                  fillOpacity: 0.8,
+                  x: "calc(x - 2)",
+                  y: "calc(y - 2)",
+                  width: "calc(w + 4)",
+                  height: "calc(h + 4)",
+                  pointerEvents: "none",
+                },
+                pipeBody: {
+                  width: "calc(w)",
+                  height: "calc(h)",
+                  y: "calc(h / -2)",
+                  fill: {
+                    type: "linearGradient",
+                    stops: [
+                      { offset: "0%", color: "gray" },
+                      { offset: "30%", color: "white" },
+                      { offset: "70%", color: "white" },
+                      { offset: "100%", color: "gray" },
+                    ],
+                    attrs: {
+                      x1: "0%",
+                      y1: "0%",
+                      x2: "0%",
+                      y2: "100%",
+                    },
+                  },
+                },
+                pipeEnd: {
+                  width: 10,
+                  height: "calc(h+6)",
+                  y: "calc(h / -2 - 3)",
+                  x: "calc(w -30)",
+                  stroke: "gray",
+                  strokeWidth: 3,
+                  fill: "white",
+                },
+                portLabel: { fontFamily: "sans-serif", pointerEvents: "none" },
+                portBody: {
+                  d: "M 0 -calc(0.5 * h) h calc(w) l 3 calc(0.5 * h) l -3 calc(0.5 * h) H 0 A calc(0.5 * h) calc(0.5 * h) 1 1 1 0 -calc(0.5 * h) Z",
+                  magnet: "active",
+                },
+              },
+            },
+          },
+          items: [
+            {
+              id: "in1",
+              group: "in",
+            },
+            {
+              id: "out1",
+              group: "out",
+            },
+          ],
         },
       });
 
@@ -1756,235 +2123,336 @@ const DashboardEditor = () => {
     }
   };
 
-  return (
-    <Box sx={{ height: "100vh", display: "flex", flexDirection: "column" }}>
-      <AppBar
-        position="static"
-        elevation={4}
-        sx={{
-          boxShadow:
-            "0px 3.8580212593px 7.7160425186px 0px rgba(0,0,0,.1019607843)",
-        }}
-      >
-        <Toolbar>
-          <Typography variant="h6" sx={{ flexGrow: 1 }}>
-            Dashboard Editor
-          </Typography>
+ return (
+    <>
+      <style>{`
+        @keyframes pulse {
+          0% { opacity: 0.7; transform: scale(0.95); }
+          50% { opacity: 1; transform: scale(1.05); }
+          100% { opacity: 0.7; transform: scale(0.95); }
+        }
+        
+        @keyframes rotate {
+    from { transform: rotate(0deg) }
+    to { transform: rotate(360deg)}
+  }
+  
+[data-animated="true"].rotate {
+  animation: spin 2s linear infinite;
+  transform-origin: center;
+  transform-box: fill-box; /* Ensures rotation around visual center */
+}
+        
+        @keyframes bounce {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-10px); }
+        }
+        
+        [data-animated="true"] {
+          animation: pulse 2s infinite;
+        }
+        
+        [data-animated="true"].rotate {
+          animation: rotate 4s linear infinite;
+        }
+        
+        [data-animated="true"].bounce {
+          animation: bounce 1s ease infinite;
+        }
+        
+        .animation-controls {
+          margin-top: 16px;
+          padding: 16px;
+          background: #f5f5f5;
+          border-radius: 4px;
+        }
+        
+        .animation-speed-slider {
+          width: 100%;
+          margin-top: 8px;
+        }
+      `}</style>
 
-          <Button
-            color="inherit"
-            onClick={handleMenuClick}
-            endIcon={<ChevronDown size={16} />}
-            sx={{ textTransform: "none" }}
-          >
-            File
-          </Button>
-          <Menu
-            anchorEl={anchorEl}
-            open={Boolean(anchorEl)}
-            onClose={handleMenuClose}
-          >
-            <MenuItem onClick={handleNew}>New File</MenuItem>
-            <MenuItem onClick={handleSave}>Save File</MenuItem>
-            <MenuItem onClick={handleOpen}>Open File</MenuItem>
-            <MenuItem onClick={saveAsRoutine}>Save As File</MenuItem>
-          </Menu>
-
-          <IconButton color="inherit" onClick={handleUndo}>
-            <Undo size={20} />
-          </IconButton>
-          <IconButton color="inherit" onClick={handleRedo}>
-            <Redo size={20} />
-          </IconButton>
-        </Toolbar>
-      </AppBar>
-
-      <Box sx={{ display: "flex", flex: 1, overflow: "hidden" }}>
-        <Box
+      <Box sx={{ height: "100vh", display: "flex", flexDirection: "column" }}>
+        <AppBar
+          position="static"
+          elevation={4}
           sx={{
-            width: "250px",
-            borderRight: "1px solid #ccc",
-            backgroundColor: "#fff",
-            overflow: "hidden",
-            display: "flex",
-            flexDirection: "column",
+            boxShadow: "0px 3.8580212593px 7.7160425186px 0px rgba(0,0,0,.1019607843)",
           }}
         >
-          <Typography
-            variant="subtitle1"
-            sx={{ p: 2, borderBottom: "1px solid #eee" }}
-          >
-            Stencil Area
-          </Typography>
+          <Toolbar>
+            <Typography variant="h6" sx={{ flexGrow: 1 }}>
+              Dashboard Editor
+            </Typography>
+
+            <Button
+              color="inherit"
+              onClick={handleMenuClick}
+              endIcon={<ChevronDown size={16} />}
+              sx={{ textTransform: "none" }}
+            >
+              File
+            </Button>
+            <Menu
+              anchorEl={anchorEl}
+              open={Boolean(anchorEl)}
+              onClose={handleMenuClose}
+            >
+              <MenuItem onClick={handleNew}>New File</MenuItem>
+              <MenuItem onClick={handleSave}>Save File</MenuItem>
+              <MenuItem onClick={handleOpen}>Open File</MenuItem>
+              <MenuItem onClick={saveAsRoutine}>Save As File</MenuItem>
+            </Menu>
+
+            <IconButton color="inherit" onClick={handleUndo}>
+              <Undo size={20} />
+            </IconButton>
+            <IconButton color="inherit" onClick={handleRedo}>
+              <Redo size={20} />
+            </IconButton>
+          </Toolbar>
+        </AppBar>
+
+        <Box sx={{ display: "flex", flex: 1, overflow: "hidden" }}>
           <Box
-            ref={stencilContainerRef}
+            sx={{
+              width: "250px",
+              borderRight: "1px solid #ccc",
+              backgroundColor: "#fff",
+              overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            <Typography
+              variant="subtitle1"
+              sx={{ p: 2, borderBottom: "1px solid #eee" }}
+            >
+              Stencil Area
+            </Typography>
+            <Box
+              ref={stencilContainerRef}
+              sx={{
+                flex: 1,
+                overflow: "auto",
+                "& .joint-stencil": {
+                  height: "100%",
+                  fontFamily: "inherit",
+                },
+                "& .joint-stencil .group-label": {
+                  backgroundColor: "#f5f5f5",
+                  padding: "8px 12px",
+                  fontSize: "12px",
+                  fontWeight: "bold",
+                  borderBottom: "1px solid #ddd",
+                },
+              }}
+            />
+          </Box>
+
+          <Box
             sx={{
               flex: 1,
-              overflow: "auto",
-              "& .joint-stencil": {
-                height: "100%",
-                fontFamily: "inherit",
-              },
-              "& .joint-stencil .group-label": {
-                backgroundColor: "#f5f5f5",
-                padding: "8px 12px",
+              backgroundColor: "#f9f9f9",
+              position: "relative",
+              overflow: "hidden",
+            }}
+          >
+            <Typography
+              variant="subtitle1"
+              sx={{
+                position: "absolute",
+                top: 8,
+                left: 16,
+                zIndex: 1,
+                backgroundColor: "rgba(255,255,255,0.9)",
+                padding: "4px 8px",
+                borderRadius: "4px",
                 fontSize: "12px",
-                fontWeight: "bold",
-                borderBottom: "1px solid #ddd",
-              },
-            }}
-          />
-        </Box>
-
-        <Box
-          sx={{
-            flex: 1,
-            backgroundColor: "#f9f9f9",
-            position: "relative",
-            overflow: "hidden",
-          }}
-        >
-          <Typography
-            variant="subtitle1"
-            sx={{
-              position: "absolute",
-              top: 8,
-              left: 16,
-              zIndex: 1,
-              backgroundColor: "rgba(255,255,255,0.9)",
-              padding: "4px 8px",
-              borderRadius: "4px",
-              fontSize: "12px",
-              color: "#666",
-            }}
-          ></Typography>
-          <Box
-            ref={paperContainerRef}
-            sx={{
-              width: "100%",
-              height: "100%",
-              "& .joint-paper": {
-                border: "none",
-              },
-              "& .joint-paper svg": {
+                color: "#666",
+              }}
+            ></Typography>
+            <Box
+              ref={paperContainerRef}
+              sx={{
                 width: "100%",
                 height: "100%",
-              },
-            }}
-          />
-        </Box>
-
-        <Box
-          sx={{
-            width: "250px",
-            borderLeft: "1px solid #ccc",
-            backgroundColor: "#fff",
-            overflow: "hidden",
-            display: "flex",
-            flexDirection: "column",
-          }}
-        >
-          <Typography
-            variant="subtitle1"
-            sx={{ p: 2, borderBottom: "1px solid #eee" }}
-          >
-            Inspector
-          </Typography>
-
-          {selectedCell && (
-            <Box
-              sx={{
-                p: 2,
-                borderLeft: "1px solid #ccc",
-                backgroundColor: "#fafafa",
-                display: "flex",
-                flexDirection: "column",
-                gap: 2,
+                "& .joint-paper": {
+                  border: "none",
+                },
+                "& .joint-paper svg": {
+                  width: "100%",
+                  height: "100%",
+                },
               }}
+            />
+          </Box>
+
+          <Box
+            sx={{
+              width: "250px",
+              borderLeft: "1px solid #ccc",
+              backgroundColor: "#fff",
+              overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            <Typography
+              variant="subtitle1"
+              sx={{ p: 2, borderBottom: "1px solid #eee" }}
             >
-              <TextField
-                label="Label"
-                value={selectedCell.get("attrs")?.label?.text || ""}
-                onChange={(e) => handleLabelChange(e.target.value)}
-                fullWidth
-                variant="outlined"
-              />
+              Inspector
+            </Typography>
 
-              <TextField
-                label="Fill Color"
-                type="color"
-                value={selectedCell.get("attrs")?.body?.fill || "#ffffff"}
-                onChange={(e) => handleFillColorChange(e.target.value)}
-                fullWidth
-                variant="outlined"
-              />
-
-              <FormControl fullWidth variant="outlined">
-                <InputLabel>Device EUI</InputLabel>
-                <Select
-                  value={selectedEUI}
-                  onChange={(e) => handleEUIChange(e.target.value)}
-                  label="Device EUI"
-                >
-                  <MenuItem value="">-- Select EUI --</MenuItem>
-                  {Object.entries(deviceModels).map(([eui, model]) => (
-                    <MenuItem key={eui} value={eui}>
-                      {model.name} ({eui})
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-
-              <FormControl fullWidth variant="outlined" disabled={!selectedEUI}>
-                <InputLabel>Device ID</InputLabel>
-                <Select
-                  value={selectedDevice}
-                  onChange={(e) => handleDeviceChange(e.target.value)}
-                  label="Device ID"
-                >
-                  <MenuItem value="">-- Select Device ID --</MenuItem>
-                  {Object.entries(devices).map(([id, device]) => (
-                    <MenuItem key={id} value={id}>
-                      {device.name || id}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-
-              {selectedDevice && Object.keys(payload).length > 0 && (
-                <FormControl component="fieldset">
-                  <Typography variant="subtitle2">Display Value:</Typography>
-                  <RadioGroup
-                    value={selectedValue}
-                    onChange={handleValueChange}
-                  >
-                    {availableValues.map((value) => (
-                      <FormControlLabel
-                        key={value}
-                        value={value}
-                        control={<Radio size="small" />}
-                        label={value}
-                      />
-                    ))}
-                  </RadioGroup>
-                </FormControl>
-              )}
-
+            {selectedCell && (
               <Box
-                ref={inspectorContainerRef}
                 sx={{
-                  flex: 1,
-                  overflow: "auto",
-                  padding: "10px",
-                  background: "#f5f5f5",
+                  p: 2,
+                  borderLeft: "1px solid #ccc",
+                  backgroundColor: "#fafafa",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 2,
                 }}
-              />
-            </Box>
-          )}
+              >
+                <TextField
+                  label="Label"
+                  value={selectedCell.get("attrs")?.label?.text || ""}
+                  onChange={(e) => handleLabelChange(e.target.value)}
+                  fullWidth
+                  variant="outlined"
+                />
+
+                <TextField
+                  label="Fill Color"
+                  type="color"
+                  value={selectedCell.get("attrs")?.body?.fill || "#ffffff"}
+                  onChange={(e) => handleFillColorChange(e.target.value)}
+                  fullWidth
+                  variant="outlined"
+                />
+
+                <FormControl fullWidth variant="outlined">
+                  <InputLabel>Device EUI</InputLabel>
+                  <Select
+                    value={selectedEUI}
+                    onChange={(e) => handleEUIChange(e.target.value)}
+                    label="Device EUI"
+                  >
+                    <MenuItem value="">-- Select EUI --</MenuItem>
+                    {Object.entries(deviceModels).map(([eui, model]) => (
+                      <MenuItem key={eui} value={eui}>
+                        {model.name} ({eui})
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+
+                <FormControl fullWidth variant="outlined" disabled={!selectedEUI}>
+                  <InputLabel>Device ID</InputLabel>
+                  <Select
+                    value={selectedDevice}
+                    onChange={(e) => handleDeviceChange(e.target.value)}
+                    label="Device ID"
+                  >
+                    <MenuItem value="">-- Select Device ID --</MenuItem>
+                    {Object.entries(devices).map(([id, device]) => (
+                      <MenuItem key={id} value={id}>
+                        {device.name || id}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+
+                {selectedDevice && Object.keys(payload).length > 0 && (
+                  <FormControl component="fieldset">
+                    <Typography variant="subtitle2">Display Value:</Typography>
+                    <RadioGroup
+                      value={selectedValue}
+                      onChange={handleValueChange}
+                    >
+                      {availableValues.map((value) => (
+                        <FormControlLabel
+                          key={value}
+                          value={value}
+                          control={<Radio size="small" />}
+                          label={value}
+                        />
+                      ))}
+                    </RadioGroup>
+                  </FormControl>
+                )}
+
+                <Box className="animation-controls">
+                  <Typography variant="subtitle2">Animation Controls</Typography>
+                  
+                  <FormControl fullWidth sx={{ mb: 2, mt: 1 }}>
+                    <InputLabel>Animation Type</InputLabel>
+                    <Select
+                      value={animationType}
+                      onChange={handleAnimationTypeChange}
+                      label="Animation Type"
+                    >
+                      <MenuItem value="pulse">Pulse</MenuItem>
+                      <MenuItem value="rotate">Rotate</MenuItem>
+                      <MenuItem value="bounce">Bounce</MenuItem>
+                      <MenuItem value="flow">Flow</MenuItem>
+                    </Select>
+                  </FormControl>
+
+                  <Typography variant="body2" sx={{ mt: 1 }}>Animation Speed</Typography>
+                  <input
+                    type="range"
+                    min="0.5"
+                    max="3"
+                    step="0.1"
+                    value={animationSpeed}
+                    onChange={handleAnimationSpeedChange}
+                    className="animation-speed-slider"
+                  />
+                  <Typography variant="caption" display="block" textAlign="center">
+                    {animationSpeed.toFixed(1)}x
+                  </Typography>
+
+                  <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
+                    <Button 
+                      variant="contained" 
+                      onClick={handleStartAnimation}
+                      fullWidth
+                      size="small"
+                    >
+                      Start
+                    </Button>
+                    <Button 
+                      variant="outlined" 
+                      onClick={handleStopAnimation}
+                      fullWidth
+                      size="small"
+                    >
+                      Stop
+                    </Button>
+                  </Box>
+                </Box>
+
+                <Box
+                  ref={inspectorContainerRef}
+                  sx={{
+                    flex: 1,
+                    overflow: "auto",
+                    padding: "10px",
+                    background: "#f5f5f5",
+                  }}
+                />
+              </Box>
+            )}
+          </Box>
         </Box>
       </Box>
-    </Box>
+    </>
   );
 };
+
 
 export default DashboardEditor;
