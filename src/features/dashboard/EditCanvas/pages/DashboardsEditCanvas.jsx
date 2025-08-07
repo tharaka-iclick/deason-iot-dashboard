@@ -29,13 +29,16 @@ import CoolingPlate from "../../../WidgetSVG/CoolingPlate";
 import VatAgitator from "../../../WidgetSVG/VatAgitator";
 import Chille from "../../../WidgetSVG/Chiller";
 import IceBank from "../../../WidgetSVG/IceBank";
+import ACFan from "../../../WidgetSVG/ACFan";
+
 import {
-  // listenForDeviceEUIs,
-  // listenForDeviceIDs,
-  // listenForDeviceData,
   listenForDeviceModels,
   listenForDevices,
+  getDeviceModels,
+  getDevice,
+  getDevicePayload,
   listenForDevicePayload,
+  listenForSensoreData,
 } from "../../../../../src/services/firebase/dataService";
 import {
   getStorage,
@@ -43,9 +46,9 @@ import {
   uploadString,
   getDownloadURL,
 } from "firebase/storage";
-
+import { isEqual } from 'lodash';
 class TemplateImage extends joint.dia.Element {
-  defaults() {
+defaults() {
     return {
       ...super.defaults,
       type: "TemplateImage",
@@ -53,6 +56,8 @@ class TemplateImage extends joint.dia.Element {
         image: {
           width: "calc(w)",
           height: "calc(h)",
+          'data-animated': false,
+          'class': ''
         },
         label: {
           textVerticalAnchor: "top",
@@ -76,237 +81,71 @@ class TemplateImage extends joint.dia.Element {
 
   initialize(...args) {
     super.initialize(...args);
-    this.setImageColor(); // One-time color setup
+    this.setImageColor();
   }
+
 
   setImageColor() {
     const svg = this.get("svg") || "";
-    const color = this.get("color") || "red"; // Set your desired color here
+    const color = this.get("color") || "red";
     this.attr(
       "image/href",
       this.dataURLPrefix + encodeURIComponent(svg.replace(/\$color/g, color))
     );
   }
+    startAnimation(type = 'pulse') {
+    this.attr('image/data-animated', true);
+    this.attr('image/class', type);
+    this.trigger('animation:start');
+    return this;
+  }
+
+  stopAnimation() {
+    this.attr('image/data-animated', false);
+    this.attr('image/class', '');
+    this.trigger('animation:stop');
+    return this;
+  }
+    pulse() {
+    return this.startAnimation('pulse');
+  }
+
+  rotate() {
+    return this.startAnimation('rotate');
+  }
+
+  flowAnimation() {
+    this.transition('attrs/image/x', 10, {
+      delay: 0,
+      duration: 1000,
+      valueFunction: joint.util.interpolate.number(0, 10),
+      timingFunction: joint.util.timing.linear
+    });
+    
+    this.transition('attrs/image/y', 10, {
+      delay: 1000,
+      duration: 1000,
+      valueFunction: joint.util.interpolate.number(0, 10),
+      timingFunction: joint.util.timing.linear
+    });
+    
+    this.transition('attrs/image/x', 0, {
+      delay: 2000,
+      duration: 1000,
+      valueFunction: joint.util.interpolate.number(10, 0),
+      timingFunction: joint.util.timing.linear
+    });
+    
+    this.transition('attrs/image/y', 0, {
+      delay: 3000,
+      duration: 1000,
+      valueFunction: joint.util.interpolate.number(10, 0),
+      timingFunction: joint.util.timing.linear
+    });
+    
+    return this;
+  }
 }
-
-// export class TemplateImage extends joint.dia.Element {
-//   defaults() {
-//     return {
-//       ...super.defaults,
-//       type: "TemplateImage",
-//       size: { width: 100, height: 100 },
-
-//       color: "blue",
-//       attrs: {
-//         image: {
-//           width: "calc(w)",
-//           height: "calc(h)",
-//         },
-//         label: {
-//           text: "Image",
-//           textVerticalAnchor: "top",
-//           textAnchor: "middle",
-//           x: "calc(0.5*w)",
-//           y: "calc(h+10)",
-//           fontSize: 10,
-//           fontFamily: "sans-serif",
-//           fill: "#333333",
-//         },
-//       },
-//       portMarkup: [
-//         {
-//           tagName: "path",
-//           selector: "portBody",
-//           attributes: {
-//             fill: "#FFFFFF",
-//             stroke: "#333333",
-//             "stroke-width": 2,
-//           },
-//         },
-//       ],
-
-//       ports: {
-//         groups: {
-//           in: {
-//             // position: "left",
-//             position: {
-//               name: "line",
-//               args: {
-//                 start: { x: "calc(w)", y: "calc(h/2 + 80)" },
-//                 end: { x: "calc(w)", y: 40 },
-//               },
-//             },
-//             markup: joint.util.svg`
-//                             <rect @selector="pipeBody" />
-//                             <rect @selector="pipeEnd" />
-//                         `,
-//             size: { width: 30, height: 30 },
-//             // label: { position: { name: "outside", args: { offset: 30 } } },
-//             z: 1,
-//             attrs: {
-//               portRoot: {
-//                 magnet: "active", // Allow outgoing connections
-//               },
-//               portLabelBackground: {
-//                 ref: "portLabel",
-//                 fill: "#FFFFFF",
-//                 fillOpacity: 0.7,
-//                 x: "calc(x - 2)",
-//                 y: "calc(y - 2)",
-//                 width: "calc(w + 4)",
-//                 height: "calc(h + 4)",
-//                 pointerEvents: "none",
-//               },
-//               pipeBody: {
-//                 width: "calc(w)",
-//                 height: "calc(h)",
-//                 y: "calc(h / -2)",
-//                 x: "calc(-1 * w)",
-//                 fill: {
-//                   type: "linearGradient",
-//                   stops: [
-//                     { offset: "0%", color: "gray" },
-//                     { offset: "30%", color: "white" },
-//                     { offset: "70%", color: "white" },
-//                     { offset: "100%", color: "gray" },
-//                   ],
-//                   attrs: {
-//                     x1: "0%",
-//                     y1: "0%",
-//                     x2: "0%",
-//                     y2: "100%",
-//                   },
-//                 },
-//               },
-//               pipeEnd: {
-//                 width: 10,
-//                 height: "calc(h+6)",
-//                 y: "calc(h / -2 - 3)",
-//                 x: "calc(w -40)",
-//                 stroke: "gray",
-//                 strokeWidth: 3,
-//                 fill: "white",
-//               },
-//               portLabel: { fontFamily: "sans-serif", pointerEvents: "none" },
-//               portBody: {
-//                 d: "M 0 -calc(0.5 * h) h calc(w) l 3 calc(0.5 * h) l -3 calc(0.5 * h) H 0 A calc(0.5 * h) calc(0.5 * h) 1 1 1 0 -calc(0.5 * h) Z",
-//                 magnet: "active",
-//               },
-//             },
-//           },
-//           out: {
-//             // position: "right",
-
-//             // label: { position: { name: "outside", args: { offset: 30 } } },
-//             position: {
-//               name: "line",
-//               args: {
-//                 start: { x: "calc(w)", y: "calc(h/2)" },
-//                 end: { x: "calc(w)", y: 40 },
-//               },
-//             },
-//             size: { width: 30, height: 30 },
-//             markup: joint.util.svg`
-//                              <g @selector="portBodyGroup" transform="rotate(180)">
-//       <rect @selector="pipeBody" />
-//       <rect @selector="pipeEnd" />
-//     </g>
-//                         `,
-//             z: 1,
-//             attrs: {
-//               portRoot: {
-//                 magnet: "active", // Allow outgoing connections
-//               },
-//               portLabelBackground: {
-//                 ref: "portLabel",
-//                 fill: "#FFFFFF",
-//                 fillOpacity: 0.8,
-//                 x: "calc(x - 2)",
-//                 y: "calc(y - 2)",
-//                 width: "calc(w + 4)",
-//                 height: "calc(h + 4)",
-//                 pointerEvents: "none",
-//               },
-//               pipeBody: {
-//                 width: "calc(w)",
-//                 height: "calc(h)",
-//                 y: "calc(h / -2)",
-//                 fill: {
-//                   type: "linearGradient",
-//                   stops: [
-//                     { offset: "0%", color: "gray" },
-//                     { offset: "30%", color: "white" },
-//                     { offset: "70%", color: "white" },
-//                     { offset: "100%", color: "gray" },
-//                   ],
-//                   attrs: {
-//                     x1: "0%",
-//                     y1: "0%",
-//                     x2: "0%",
-//                     y2: "100%",
-//                   },
-//                 },
-//               },
-//               pipeEnd: {
-//                 width: 10,
-//                 height: "calc(h+6)",
-//                 y: "calc(h / -2 - 3)",
-//                 x: "calc(w -30)",
-//                 stroke: "gray",
-//                 strokeWidth: 3,
-//                 fill: "white",
-//               },
-//               portLabel: { fontFamily: "sans-serif", pointerEvents: "none" },
-//               portBody: {
-//                 d: "M 0 -calc(0.5 * h) h calc(w) l 3 calc(0.5 * h) l -3 calc(0.5 * h) H 0 A calc(0.5 * h) calc(0.5 * h) 1 1 1 0 -calc(0.5 * h) Z",
-//                 magnet: "active",
-//               },
-//             },
-//           },
-//         },
-//         items: [
-//           {
-//             id: "in1",
-//             group: "in",
-//           },
-//           {
-//             id: "out1",
-//             group: "out",
-//           },
-//         ],
-//       },
-//     };
-//   }
-
-//   preinitialize() {
-//     this.dataURLPrefix = "data:image/svg+xml;utf8,";
-//     this.markup = [
-//       {
-//         tagName: "image",
-//         selector: "image",
-//       },
-//       {
-//         tagName: "text",
-//         selector: "label",
-//       },
-//     ];
-//   }
-
-//   initialize(...args) {
-//     super.initialize(...args);
-//     this.on("change:color", this.setImageColor);
-//     this.setImageColor();
-//   }
-
-//   setImageColor() {
-//     const svg = this.get("svg") || "";
-//     const color = this.get("color") || "black";
-//     this.attr(
-//       "image/href",
-//       this.dataURLPrefix + encodeURIComponent(svg.replace(/\$color/g, color))
-//     );
-//   }
-// }
 
 const DashboardEditor = () => {
   const paperContainerRef = useRef(null);
@@ -335,7 +174,52 @@ const DashboardEditor = () => {
   const [selectedValue, setSelectedValue] = useState("");
   const [availableValues, setAvailableValues] = useState([]);
   const [payload, setPayload] = useState({});
+  const [animationType, setAnimationType] = useState("pulse");
+  const [animationSpeed, setAnimationSpeed] = useState(1);
 
+  const handleStartAnimation = () => {
+    if (!selectedCell) return;
+    
+    switch(animationType) {
+      case 'pulse':
+        selectedCell.pulse();
+        break;
+      case 'rotate':
+        selectedCell.rotate();
+        break;
+      case 'flow':
+        selectedCell.flowAnimation();
+        break;
+      default:
+        selectedCell.startAnimation(animationType);
+    }
+        const imageEl = document.querySelector(`[model-id="${selectedCell.id}"] image`);
+    if (imageEl) {
+      imageEl.style.animationDuration = `${2 / animationSpeed}s`;
+    }
+  };
+
+  const handleAnimationSpeedChange = (event) => {
+    const speed = parseFloat(event.target.value);
+    setAnimationSpeed(speed);
+    
+    if (selectedCell && selectedCell.attr('image/data-animated')) {
+      const imageEl = document.querySelector(`[model-id="${selectedCell.id}"] image`);
+      if (imageEl) {
+        imageEl.style.animationDuration = `${2 / speed}s`;
+      }
+    }
+  };
+
+    const handleStopAnimation = () => {
+    if (selectedCell) {
+      selectedCell.stopAnimation();
+    }
+  };
+
+  const handleAnimationTypeChange = (event) => {
+    setAnimationType(event.target.value);
+  };
   const formatKey = (key) => {
     return key
       .split("_")
@@ -343,31 +227,40 @@ const DashboardEditor = () => {
       .join(" ");
   };
 
-  // Store device data subscriptions for each cell
   const deviceSubscriptions = useRef(new Map());
-  // Store device data for each cell
   const cellDeviceData = useRef(new Map());
 
-  // Helper function to get cell ID
   const getCellId = (cell) => cell.id;
 
-  // Helper function to update cell display based on its device data
   const updateCellDisplay = (cell, data) => {
     if (!cell || !data) return;
 
     const payload = data || {};
-    const value = payload[selectedValue];
+   // const value = payload[selectedValue];
 
     console.log("payload01", data);
-
-    if (typeof value !== "undefined") {
-      // Update label with device model name if available
+ console.log("asas selectedEUI", selectedEUI);
+  console.log("asas selectedDevice", selectedDevice);
+    console.log("asas selectedValue", selectedValue);
+ const unsubscribe = listenForSensoreData(selectedEUI, selectedDevice,selectedValue, (value) => {
+         if (typeof value !== "undefined") {
       const modelName = selectedValue || "Device";
       cell.attr("label/text", `${modelName}: ${value}`);
+      console.log("value2", value);
 
-      // Customize appearance based on value type
+                if (value=="open") {
+           selectedCell.rotate();
+               const imageEl = document.querySelector(`[model-id="${selectedCell.id}"] image`);
+    if (imageEl) {
+      imageEl.style.animationDuration = `${2 / animationSpeed}s`;
+    }}
+     else {
+   if (selectedCell) {
+  // selectedCell.stopAnimation();
+    }
+   
+      }
       if (typeof value === "number") {
-        // For numeric values, use color scale
         const range = deviceModels[cell.prop("custom/deviceModel")]?.range || [
           0, 100,
         ];
@@ -375,45 +268,58 @@ const DashboardEditor = () => {
           Math.max((value - range[0]) / (range[1] - range[0]), 0),
           1
         );
+            console.log("normalizedValue", normalizedValue);
         const hue = (1 - normalizedValue) * 120; // Green (0) to Red (120)
         cell.attr("body/fill", `hsl(${hue}, 100%, 80%)`);
+
       } else {
-        // For non-numeric values, use a neutral color
         cell.attr("body/fill", "#e0e0e0");
+   
       }
     }
+     
+      });
+      
+   unsubscribe();
   };
-  // Function to subscribe a cell to device data
   const subscribeCellToDevice = (cell, eui, deviceId, deviceModel) => {
     const cellId = getCellId(cell);
 
-    // Unsubscribe from previous device data if exists
     if (deviceSubscriptions.current.has(cellId)) {
       deviceSubscriptions.current.get(cellId)();
       deviceSubscriptions.current.delete(cellId);
     }
 
     if (eui && deviceId) {
-      // Subscribe to new device data
-      const unsubscribe = listenForDevicePayload(eui, deviceId, (data) => {
+  const fetchDevicePayload = async () => {
+    if (eui && deviceId) {
+      try {
+        const data = await getDevicePayload(eui, deviceId);
         console.log(`Device data for cell ${cellId}:`, data);
         cellDeviceData.current.set(cellId, data);
         setPayload(data);
 
-        // Update available values from payload keys
         const payloadKeys = Object.keys(data || {});
         if (payloadKeys.length > 0) {
           setAvailableValues(payloadKeys);
           console.log("payloadKeys", payloadKeys);
-
+  console.log("selectedValuew", selectedValue);
           if (!selectedValue || !payloadKeys.includes(selectedValue)) {
             setSelectedValue(payloadKeys);
           }
         }
-        updateCellDisplay(cell, data);
-      });
+        //updateCellDisplay(cell, data);
+        // Do something with the payload
+      } catch (error) {
+        console.error("Error fetching device payload:", error);
+      }
+    }
+  };
+       fetchDevicePayload();
+       
+ 
 
-      deviceSubscriptions.current.set(cellId, unsubscribe);
+     // deviceSubscriptions.current.set(cellId, unsubscribe);
 
       cell.prop("custom/deviceEUI", eui);
       cell.prop("custom/deviceID", deviceId);
@@ -428,53 +334,46 @@ const DashboardEditor = () => {
     cellDeviceData.current.delete(cellId);
   };
 
-  useEffect(() => {
-    const unsubscribe = listenForDeviceModels((models) => {
+
+  
+
+
+
+useEffect(() => {
+  const fetchDeviceModels = async () => {
+    try {
+      const models = await getDeviceModels();
       console.log("Fetched device models:", models);
       setDeviceModels(models);
-      console.log("models", models);
-      // console.log("Fetched EUIs:", euis);
-      // setDeviceEUIs(euis);
-      // if (euis.length > 0 && !selectedEUI) {
-      //   setSelectedEUI(euis[0]);
-      // }
-    });
-    return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    const unsubscribe = listenForDeviceModels((devices) => {
-      const euis = Object.keys(devices);
+      const euis = Object.keys(models);
       console.log("Fetched EUIs:", euis);
       setDeviceEUIs(euis);
-    });
-    return () => unsubscribe();
-  }, []);
+    } catch (error) {
+      console.error("Error fetching device models:", error);
+    }
+  };
 
-  // useEffect(() => {
-  //   if (selectedEUI) {
-  //     console.log("Fetching Device IDs for EUI:", selectedEUI);
-  //     const unsubscribe = listenForDeviceIDs(selectedEUI, (ids) => {
-  //       console.log("Fetched Device IDs:", ids);
-  //       setDeviceIDs(ids);
-  //     });
-  //     return () => unsubscribe();
-  //   } else {
-  //     setDeviceIDs([]);
-  //   }
-  // }, [selectedEUI]);
-  useEffect(() => {
+  fetchDeviceModels();
+}, []);
+
+useEffect(() => {
+  const fetchDevice = async () => {
     if (selectedEUI) {
-      console.log("Fetching Devices for EUI:", selectedEUI);
-      const unsubscribe = listenForDevices(selectedEUI, (devices) => {
-        console.log("Fetched Devices:", devices);
-        setDevices(devices);
-      });
-      return () => unsubscribe();
+      try {
+        console.log("Fetching Devices for EUI:", selectedEUI);
+        const newdevices = await getDevice(selectedEUI);
+        console.log("Fetched Devices:", newdevices);
+        setDevices(newdevices);
+      } catch (error) {
+        console.error("Error fetching device:", error);
+      }
     } else {
       setDevices({});
     }
-  }, [selectedEUI]);
+  };
+
+  fetchDevice();
+}, [selectedEUI]);
 
   const logsContainerRef = useRef(null);
   const lastViewRef = useRef(null);
@@ -616,90 +515,6 @@ const DashboardEditor = () => {
     }
   };
 
-  // firebase file uploading
-
-  // const handleNew = async () => {
-  //   const fileName = prompt("Enter new file name (without extension):");
-  //   if (!fileName) return;
-
-  //   paperRef.current.model.clear();
-
-  //   const json = JSON.stringify(paperRef.current.model.toJSON());
-  //   const storage = getStorage();
-  //   const storageRef = ref(storage, `diagrams/${fileName}.joint`);
-
-  //   try {
-  //     await uploadString(storageRef, json, "raw");
-  //     setCurrentFileName(fileName);
-  //     commandManagerRef.current.reset();
-  //     setCurrentCmdId(null);
-  //     console.log("New file created:", fileName);
-  //   } catch (error) {
-  //     console.error("Firebase New File Creation Failed:", error);
-  //   }
-  // };
-
-  // const handleOpen = async () => {
-  //   const fileName = prompt("Enter file name to open (without extension):");
-  //   if (!fileName) return;
-
-  //   const storage = getStorage();
-  //   const storageRef = ref(storage, `diagrams/${fileName}.joint`);
-
-  //   try {
-  //     const url = await getDownloadURL(storageRef);
-  //     const response = await fetch(url);
-  //     const data = await response.json();
-
-  //     paperRef.current.model.fromJSON(data);
-  //     setCurrentFileName(fileName);
-  //     commandManagerRef.current.reset();
-  //     setCurrentCmdId(null);
-  //     console.log("Opened:", fileName);
-  //   } catch (error) {
-  //     console.error("Firebase Open Failed:", error);
-  //   }
-  // };
-
-  // const saveAsRoutine = async () => {
-  //   const fileName = prompt("Enter file name to save (without extension):");
-  //   if (!fileName) return;
-
-  //   const storage = getStorage();
-  //   const storageRef = ref(storage, `diagrams/${fileName}.joint`);
-
-  //   const json = JSON.stringify(paperRef.current.model.toJSON());
-
-  //   try {
-  //     await uploadString(storageRef, json, "raw");
-  //     setCurrentFileName(fileName);
-  //     setCurrentCmdId(getLastCmdId(commandManagerRef.current));
-  //     console.log("Saved As:", fileName);
-  //   } catch (error) {
-  //     console.error("Firebase Save As Failed:", error);
-  //   }
-  // };
-
-  // const handleSave = async () => {
-  //   if (!currentFileName) {
-  //     await saveAsRoutine();
-  //     return;
-  //   }
-
-  //   const storage = getStorage();
-  //   const storageRef = ref(storage, `diagrams/${currentFileName}.joint`);
-
-  //   const json = JSON.stringify(paperRef.current.model.toJSON());
-
-  //   try {
-  //     await uploadString(storageRef, json, "raw");
-  //     console.log("Saved to Firebase");
-  //     setCurrentCmdId(getLastCmdId(commandManagerRef.current));
-  //   } catch (error) {
-  //     console.error("Firebase Save Failed:", error);
-  //   }
-  // };
-
   const handleUndo = () => {
     commandManagerRef.current.undo();
   };
@@ -714,53 +529,9 @@ const DashboardEditor = () => {
   const [isLoadingEUIs, setIsLoadingEUIs] = useState(true);
   const [isLoadingDeviceIDs, setIsLoadingDeviceIDs] = useState(false);
 
-  // useEffect(() => {
-  //   setIsLoadingEUIs(true);
-  //   const unsubscribe = listenForDeviceEUIs((euis) => {
-  //     console.log("Fetched EUIs:", euis);
-  //     setDeviceEUIs(euis);
-  //     setIsLoadingEUIs(false);
-  //     // if (euis.length > 0 && !selectedEUI) {
-  //     //   setSelectedEUI(euis[0]); // Set default EUI
-  //     // }
-  //   });
-  //   return () => unsubscribe();
-  // }, []);
-
-  // useEffect(() => {
-  //   if (selectedEUI) {
-  //     setIsLoadingDeviceIDs(true);
-  //     console.log("Fetching Device IDs for EUI:", selectedEUI);
-  //     const unsubscribe = listenForDeviceIDs(selectedEUI, (ids) => {
-  //       console.log("Fetched Device IDs:", ids);
-  //       setDeviceIDs(ids);
-  //       setIsLoadingDeviceIDs(false);
-  //     });
-  //     return () => unsubscribe();
-  //   } else {
-  //     setDeviceIDs([]); // Clear deviceIDs if no EUI selected
-  //     setIsLoadingDeviceIDs(false);
-  //   }
-  // }, [selectedEUI]);
-
-  // useEffect(() => {
-  //   if (selectedEUI && selectedDevice) {
-  //     const unsubscribe = listenForDeviceData(
-  //       selectedEUI,
-  //       selectedDevice,
-  //       (data) => {
-  //         console.log("Fetched Device Data:", data);
-  //         setDeviceData(data);
-  //       }
-  //     );
-  //     return () => unsubscribe();
-  //   }
-  // }, [selectedEUI, selectedDevice]);
-
   useEffect(
     () => {
       const { dia, shapes, mvc, ui, highlighters, util } = joint;
-      // const graph = new dia.Graph({}, { cellNamespace: shapes });
       const namespace = {
         ...shapes,
         TemplateImage,
@@ -795,7 +566,6 @@ const DashboardEditor = () => {
         async: true,
         sorting: dia.Paper.sorting.APPROX,
         background: { color: "#F3F7F6" },
-        // defaultLink: () => new joint.shapes.standard.Link(),
         defaultLink: () => {
           const linkIdNumber = ++linkIdCounter;
           return createPipe(linkIdNumber);
@@ -910,27 +680,11 @@ const DashboardEditor = () => {
           },
         });
 
-        // Create Inspector
         inspectorInstanceRef.current = joint.ui.Inspector.create(
           inspectorContainerRef.current,
           {
             cell,
             inputs: {
-              // "attrs/label/text": {
-              //   type: "text",
-              //   label: "Label",
-              //   group: "text",
-              // },
-              // "attrs/body/fill": {
-              //   type: "color",
-              //   label: "Fill Color",
-              //   group: "appearance",
-              // },
-              // "custom/description": {
-              //   type: "text",
-              //   label: "Description",
-              //   group: "text",
-              // },
               "size/width": {
                 type: "number",
                 label: "Width",
@@ -945,59 +699,6 @@ const DashboardEditor = () => {
                 max: 500,
                 group: "size",
               },
-              // "custom/type": {
-              //   type: "select",
-              //   label: "Type",
-              //   options: [
-              //     { value: "rectangle", content: "Rectangle" },
-              //     { value: "circle", content: "Circle" },
-              //     { value: "ellipse", content: "Ellipse" },
-              //   ],
-              //   group: "appearance",
-              // },
-              // "custom/deviceEUI": {
-              //   type: "select",
-              //   label: "Device EUI",
-              //   options: isLoadingEUIs
-              //     ? [{ value: "", content: "Loading EUIs..." }]
-              //     : deviceEUIs.length > 0
-              //     ? deviceEUIs.map((eui) => ({ value: eui, content: eui }))
-              //     : [{ value: "", content: "No EUIs available" }],
-              //   defaultValue: selectedEUI || "",
-              //   events: {
-              //     change: (value) => {
-              //       console.log("Device EUI selected:", value);
-              //       setSelectedEUI(value);
-              //       cell.prop("custom/deviceEUI", value);
-              //     },
-              //   },
-              //   group: "device",
-              //   disabled:
-              //     isLoadingEUIs || !deviceEUIs || deviceEUIs.length === 0,
-              // },
-              // "custom/deviceID": {
-              //   type: "select",
-              //   label: "Device ID",
-              //   options: isLoadingDeviceIDs
-              //     ? [{ value: "", content: "Loading Device IDs..." }]
-              //     : deviceIDs.length > 0
-              //     ? deviceIDs.map((id) => ({ value: id, content: id }))
-              //     : [{ value: "", content: "No Device IDs available" }],
-              //   defaultValue: selectedDevice || "",
-              //   events: {
-              //     change: (value) => {
-              //       console.log("Device ID selected in inspector:", value);
-              //       setSelectedDevice(value);
-              //       cell.prop("custom/deviceID", value);
-              //     },
-              //   },
-              //   group: "device",
-              //   disabled:
-              //     isLoadingDeviceIDs ||
-              //     !deviceIDs ||
-              //     deviceIDs.length === 0 ||
-              //     !selectedEUI,
-              // },
             },
             groups: {
               text: { label: "Text Properties", index: 1 },
@@ -1017,7 +718,6 @@ const DashboardEditor = () => {
         );
       });
 
-      // Paper event handlers
       paper.on("element:magnet:pointerclick", (elementView, evt, magnet) => {
         paper.removeTools();
         elementView.addTools(new dia.ToolsView({ tools: [new Ports()] }));
@@ -1041,8 +741,6 @@ const DashboardEditor = () => {
                   "stroke-width": 2,
                   "stroke-dasharray": "none",
                   "pointer-events": "none",
-                  // rx: 2,
-                  // ry: 2,
                 },
               }),
             ],
@@ -1095,7 +793,6 @@ const DashboardEditor = () => {
       });
 
       paper.on("cell:pointerup", function (cellView) {
-        // We don't want a Halo for links.
         if (cellView.model instanceof joint.dia.Link) return;
 
         const halo = new joint.ui.Halo({
@@ -1110,7 +807,6 @@ const DashboardEditor = () => {
         halo.render();
       });
 
-      // Initialize Stencil
       const stencil = new ui.Stencil({
         paper,
         usePaperGrid: true,
@@ -1138,7 +834,6 @@ const DashboardEditor = () => {
         dragStartClone: (cell) => {
           const clone = cell.clone();
           if (clone.get("port")) {
-            // Handle ports (center them, preserve original size)
             const { width, height } = clone.size();
             clone.attr("body/fill", "lightgray");
             clone.attr(
@@ -1150,7 +845,6 @@ const DashboardEditor = () => {
           if (cloneSize) {
             clone.resize(cloneSize.width, cloneSize.height);
           } else {
-            // Fallback to original size
             const { width, height } = cell.size();
             clone.resize(width, height);
           }
@@ -1175,121 +869,6 @@ const DashboardEditor = () => {
         },
       });
 
-      // graph.addCell(rect);
-
-      // paper.on("element:pointerclick", (elementView) => {
-      //   paper.removeTools();
-      //   const element = elementView.model;
-      //   if (element.get("uniqueKey") === "valve") {
-      //     const currentStatus = element.attr("state/status");
-      //     element.attr(
-      //       "state/status",
-      //       currentStatus === "open" ? "closed" : "open"
-      //     );
-      //     element.attr("label/text", `Valve (${element.attr("state/status")})`);
-      //     element.attr(
-      //       "body/fill",
-      //       currentStatus === "open" ? "#32CD32" : "#FF4500"
-      //     );
-      //   }
-      //   const toolsView = new dia.ToolsView({
-      //     tools: [
-      //       new joint.elementTools.Boundary({
-      //         padding: 10,
-      //         useModelGeometry: true,
-      //         attributes: {
-      //           fill: "#4a7bcb",
-      //           "fill-opacity": 0.1,
-      //           stroke: "#4a7bcb",
-      //           "stroke-width": 2,
-      //           "stroke-dasharray": "none",
-      //           "pointer-events": "none",
-      //           // rx: 2,
-      //           // ry: 2,
-      //         },
-      //       }),
-      //       // new joint.elementTools.Connect({
-      //       //   useModelGeometry: true,
-      //       //   x: "calc(w + 10)",
-      //       //   y: "calc(h / 2)",
-      //       // }),
-      //       new joint.elementTools.Remove({
-      //         useModelGeometry: true,
-      //         x: -10,
-      //         y: -10,
-      //       }),
-      //     ],
-      //   });
-      //   elementView.addTools(toolsView);
-      // });
-
-      // paper.on("element:pointerclick", (elementView) => {
-      //   const cell = elementView.model;
-      //   if (inspectorInstanceRef.current) {
-      //     // inspectorInstanceRef.current.close();
-      //     inspectorInstanceRef.current.remove();
-      //   }
-
-      //   // Create Inspector
-      //   inspectorInstanceRef.current = joint.ui.Inspector.create(
-      //     inspectorContainerRef.current,
-      //     {
-      //       cell,
-      //       inputs: {
-      //         "attrs/label/text": {
-      //           type: "text",
-      //           label: "Label",
-      //           group: "text",
-      //         },
-      //         "attrs/body/fill": {
-      //           type: "color",
-      //           label: "Fill Color",
-      //           group: "appearance",
-      //         },
-      //         "custom/description": {
-      //           type: "text",
-      //           label: "Description",
-      //           group: "text",
-      //         },
-      //         "size/width": {
-      //           type: "number",
-      //           label: "Width",
-      //           min: 50,
-      //           max: 500,
-      //           group: "size",
-      //         },
-      //         "size/height": {
-      //           type: "number",
-      //           label: "Height",
-      //           min: 50,
-      //           max: 500,
-      //           group: "size",
-      //         },
-      //         "custom/type": {
-      //           type: "select",
-      //           label: "Type",
-      //           options: [
-      //             { value: "rectangle", content: "Rectangle" },
-      //             { value: "circle", content: "Circle" },
-      //             { value: "ellipse", content: "Ellipse" },
-      //           ],
-      //           group: "appearance",
-      //         },
-      //       },
-      //       groups: {
-      //         text: { label: "Text Properties", index: 1 },
-      //         appearance: { label: "Appearance", index: 2 },
-      //         size: { label: "Size", index: 3 },
-      //       },
-      //       groupState: {
-      //         text: { open: true },
-      //         appearance: { open: true },
-      //         size: { open: true },
-      //       },
-      //     }
-      //   );
-      // });
-
       const el = new shapes.standard.Rectangle({
         position: { x: 40, y: 40 },
         size: { width: 120, height: 60 },
@@ -1307,74 +886,42 @@ const DashboardEditor = () => {
         },
       });
 
-      // graph.addCells([el]);
-
-      // if (inspectorContainerRef.current) {
-      //   ui.Inspector.create(inspectorContainerRef.current, {
-      //     cell: el,
-      //     inputs: {
-      //       furnitureType: {
-      //         label: "Furniture Type",
-      //         type: "select-box",
-      //         options: [
-      //           { value: "Chairs", content: "Chairs" },
-      //           { value: "Tables", content: "Tables" },
-      //           { value: "Drawers", content: "Drawers" },
-      //         ],
-      //         width: 150,
-      //       },
-      //       attrs: {
-      //         label: {
-      //           text: {
-      //             label: "Product",
-      //             type: "select-box",
-      //             width: 150,
-      //             options: {
-      //               dependencies: ["furnitureType"],
-      //               source: (data) => {
-      //                 const { value } = data.dependencies["furnitureType"];
-      //                 switch (value) {
-      //                   case "Chairs":
-      //                     return [
-      //                       { value: "Ostano", content: "Ostano" },
-      //                       { value: "Stig", content: "Stig" },
-      //                       { value: "Lidas", content: "Lidas" },
-      //                       { value: "Utter", content: "Utter" },
-      //                     ];
-      //                   case "Tables":
-      //                     return [
-      //                       { value: "Lack", content: "Lack" },
-      //                       { value: "Sandsberg", content: "Sandsberg" },
-      //                       { value: "Vilto", content: "Vilto" },
-      //                     ];
-      //                   case "Drawers":
-      //                     return [
-      //                       { value: "Vihals", content: "Vihals" },
-      //                       { value: "Malm", content: "Malm" },
-      //                       { value: "Kullen", content: "Kullen" },
-      //                     ];
-      //                   default:
-      //                     return [];
-      //                 }
-      //               },
-      //             },
-      //           },
-      //         },
-      //       },
-      //     },
-      //   });
-      // }
-
-      // Define stencil elements and ports
       const stencilElements = [
+            {
+      type: "custom.TemplateImage",
+      svg: MotorPumpSVG,
+      size: { width: 80, height: 60 },
+      cloneSize: { width: 200, height: 200 },
+      attrs: {
+        image: {
+          'data-animated': false,
+          'class': ''
+        }
+      },
+      contextMenu: [
+        {
+          content: 'Pulse Animation',
+          action: (cellView) => cellView.model.pulse()
+        },
+        {
+          content: 'Rotate Animation',
+          action: (cellView) => cellView.model.rotate()
+        },
+        '-',
+        {
+          content: 'Stop Animation',
+          action: (cellView) => cellView.model.stopAnimation()
+        }
+      ]
+    },
         {
           type: "standard.Rectangle",
           size: { width: 100, height: 60 },
           cloneSize: { width: 150, height: 80 },
           attrs: {
             body: {
-              fill: "#ffffff", // transparent background
-              stroke: "transparent", // no border outline
+              fill: "#ffffff",
+              stroke: "transparent",
             },
             label: {
               text: "Text",
@@ -1412,11 +959,6 @@ const DashboardEditor = () => {
             color: "#ffffff",
           },
         },
-        // {
-        //   type: "standard.Rectangle",
-        //   size: { width: 80, height: 60 },
-        //   attrs: { body: { rx: 10, ry: 10, fill: "#48cba4" } },
-        // },
         {
           type: "custom.TemplateImage",
           svg: MotorPumpSVG,
@@ -1459,44 +1001,16 @@ const DashboardEditor = () => {
           cloneSize: { width: 250, height: 200 },
           attrs: {},
         },
+             {
+          type: "custom.TemplateImage",
+          svg: ACFan,
+          size: { width: 80, height: 60 },
+          cloneSize: { width: 250, height: 200 },
+          attrs: {},
+        },
       ];
 
       const stencilPorts = [
-        // Output Port (Rectangle)
-        // {
-        //   type: "standard.Path",
-        //   size: { width: 24, height: 24 },
-        //   attrs: { body: { fill: "#ff9580" } },
-        //   port: {
-        //     group: "out",
-        //     markup: util.svg`
-        //   <rect @selector="portBody" x="-12" y="-12"
-        //     width="24" height="24"
-        //     fill="#ff9580" stroke="#333333"
-        //     stroke-width="2"
-        //     magnet="active"
-        //     port-group="out"
-        //    />
-        // `,
-        //   },
-        // },
-        // {
-        //   type: "standard.Path",
-        //   size: { width: 24, height: 24 },
-        //   attrs: { body: { fill: "#ff9580" } },
-        //   port: {
-        //     group: "in",
-        //     markup: util.svg`
-        //   <rect @selector="portBody" x="-12" y="-12"
-        //     width="24" height="24"
-        //     fill="#ff9580" stroke="#333333"
-        //     stroke-width="2"
-        //     magnet="active"
-        //     port-group="out"
-        //    />
-        // `,
-        //   },
-        // },
         {
           type: "standard.Rectangle",
           size: { width: 10, height: 10 },
@@ -1535,17 +1049,16 @@ const DashboardEditor = () => {
           </linearGradient>
         </defs>
       </g>
-    `,
+     `,
           },
         },
-        // Output Port (Path)
         {
           type: "standard.Path",
           size: { width: 30, height: 25 },
           markup: util.svg`
-    <rect @selector="pipeBody" />
-    <rect @selector="pipeEnd" />
-  `,
+      <rect @selector="pipeBody" />
+      <rect @selector="pipeEnd" />
+     `,
           attrs: {
             portRoot: {
               magnetSelector: "pipeEnd",
@@ -1594,7 +1107,6 @@ const DashboardEditor = () => {
             size: { width: 30, height: 25 },
             attrs: {
               portRoot: {
-                // magnetSelector: "pipeEnd",
                 magnet: "active",
                 "port-group": "out",
               },
@@ -1642,17 +1154,16 @@ const DashboardEditor = () => {
             markup: util.svg`
       <rect @selector="pipeBody" magnet="active" port-group="out"/>
       <rect @selector="pipeEnd" x="-12"/>
-    `,
+      `,
           },
         },
-        // Input Port (Pipe)
         {
           type: "standard.Path",
           size: { width: 30, height: 25 },
           markup: util.svg`
       <rect @selector="pipeBody" />
       <rect @selector="pipeEnd" />
-    `,
+      `,
           attrs: {
             portRoot: {
               magnetSelector: "pipeEnd",
@@ -1755,37 +1266,13 @@ const DashboardEditor = () => {
         `,
           },
         },
-        // Input Port (Circle)
-        // {
-        //   type: "standard.Circle",
-        //   size: { width: 30, height: 30 },
-        //   attrs: { body: { fill: "#80aaff", stroke: "#333333" } },
-        //   port: {
-        //     group: "in",
-        //     markup: util.svg`
-        //   <circle @selector="portBody" r="15" fill="#80aaff" stroke="#333333" stroke-width="2" magnet="passive" port-group="in" />
-        // `,
-        //   },
-        // },
-        // Output Port (Circle)
-        // {
-        //   type: "standard.Circle",
-        //   size: { width: 30, height: 30 },
-        //   attrs: { body: { fill: "#ff9580", stroke: "#333333" } },
-        //   port: {
-        //     group: "out",
-        //     markup: util.svg`
-        //   <circle @selector="portBody" r="15" fill="#ff9580" stroke="#333333" stroke-width="2" magnet="active" port-group="out" />
-        // `,
-        //   },
-        // },
         {
           type: "standard.Path",
           size: { width: 30, height: 25 },
           markup: util.svg`
       <rect @selector="pipeBody" />
       <rect @selector="pipeEnd" />
-    `,
+     `,
           attrs: {
             portRoot: {
               magnetSelector: "pipeEnd",
@@ -1890,14 +1377,13 @@ const DashboardEditor = () => {
       `,
           },
         },
-        // New Vertical Input Port (Pipe)
         {
           type: "standard.Path",
           size: { width: 30, height: 25 },
           markup: util.svg`
       <rect @selector="pipeBody" />
       <rect @selector="pipeEnd" />
-    `,
+     `,
           attrs: {
             portRoot: {
               magnetSelector: "pipeEnd",
@@ -2007,65 +1493,42 @@ const DashboardEditor = () => {
         element.ports = {
           groups: {
             in: {
-              position: { name: "left" }, // Input ports on the left
+              position: { name: "left" },
               attrs: { portBody: { magnet: true } },
               args: { dx: 0, dy: 0 },
-              //     label: {
-              //       position: { name: "inside", args: { offset: 22 } },
-              //       markup: util.svg`
-              //   <text @selector="portLabel" y="0.3em" fill="#333" text-anchor="middle" font-size="15" font-family="sans-serif" />
-              // `,
-              //     },
             },
             out: {
-              position: { name: "right" }, // Output ports on the right
+              position: { name: "right" },
               attrs: { portBody: { magnet: true } },
               args: { dx: 0, dy: 0 },
-              //     label: {
-              //       position: { name: "inside", args: { offset: 22 } },
-              //       markup: util.svg`
-              //   <text @selector="portLabel" y="0.3em" fill="#333" text-anchor="middle" font-size="15" font-family="sans-serif" />
-              // `,
-              //     },
             },
           },
           items: [
-            // {
-            //   id: `in-${element.id}-1`,
-            //   group: "in",
-            //   attrs: { portLabel: { text: "In" } },
-            // },
-            // {
-            //   id: `out-${element.id}-1`,
-            //   group: "out",
-            //   attrs: { portLabel: { text: "Out" } },
-            // },
           ],
         };
       });
 
       stencil.load({ elements: stencilElements, ports: stencilPorts });
 
-      // Stencil event handlers
       stencil.on({
         "element:dragstart": (cloneView, evt) => {
           const clone = cloneView.model;
           evt.data.isPort = clone.get("port");
-          console.log("Drag start, port:", evt.data.isPort); // Debug
+          console.log("Drag start, port:", evt.data.isPort);
           paper.removeTools();
         },
         "element:dragstart element:drag": (cloneView, evt, cloneArea) => {
           if (!evt.data.isPort) return;
           const [dropTarget] = graph.findModelsFromPoint(cloneArea.topLeft());
-          console.log("Drop target:", dropTarget); // Debug
+          console.log("Drop target:", dropTarget);
           if (dropTarget) {
             evt.data.dropTarget = dropTarget;
             highlighters.mask.add(
               dropTarget.findView(paper),
-              "body", // Replace with ".body" or "root" if needed
+              "body",
               "valid-drop-target",
               {
-                layer: joint.dia.Paper.Layers.FRONT, // Use FRONT for visibility
+                layer: joint.dia.Paper.Layers.FRONT,
                 attrs: {
                   stroke: "#9580ff",
                   "stroke-width": 2,
@@ -2108,7 +1571,6 @@ const DashboardEditor = () => {
         },
       });
 
-      // Create and add the single tree element
       const templateImage = new TemplateImage({
         svg: MotorPumpSVG,
         position: { x: 100, y: 100 },
@@ -2129,7 +1591,6 @@ const DashboardEditor = () => {
         ports: {
           groups: {
             in: {
-              // position: "left",
               position: {
                 name: "line",
                 args: {
@@ -2149,11 +1610,10 @@ const DashboardEditor = () => {
                             <rect @selector="pipeEnd" />
                         `,
               size: { width: 30, height: 30 },
-              // label: { position: { name: "outside", args: { offset: 30 } } },
               z: -1,
               attrs: {
                 portRoot: {
-                  magnet: "active", // Allow outgoing connections
+                  magnet: "active",
                 },
                 portLabelBackground: {
                   ref: "portLabel",
@@ -2203,9 +1663,6 @@ const DashboardEditor = () => {
               },
             },
             out: {
-              // position: "right",
-
-              // label: { position: { name: "outside", args: { offset: 30 } } },
               position: {
                 name: "line",
                 args: {
@@ -2218,12 +1675,12 @@ const DashboardEditor = () => {
                              <g @selector="portBodyGroup" transform="rotate(180)">
       <rect @selector="pipeBody" />
       <rect @selector="pipeEnd" />
-    </g>
+      </g>
                         `,
               z: 1,
               attrs: {
                 portRoot: {
-                  magnet: "active", // Allow outgoing connections
+                  magnet: "active",
                 },
                 portLabelBackground: {
                   ref: "portLabel",
@@ -2285,26 +1742,6 @@ const DashboardEditor = () => {
         },
       });
 
-      // graph.addCell(templateImage);
-
-      // const templateImage01 = new TemplateImage({
-      //   svg: HeatPumpSVG,
-      //   attrs: {},
-      // });
-      // const [ti1] = addImages(templateImage01, 220);
-      // ti1.set("color", "red");
-
-      // function addImages(image, x = 0, y = 20) {
-      //   const images = [
-      //     image
-      //       .clone()
-      //       .resize(250, 250)
-      //       .position(x, y + 230),
-      //   ];
-      //   graph.addCells(images);
-      //   return images;
-      // }
-
       const svgMarkup = {
         tagName: "svg",
         selector: "body",
@@ -2317,60 +1754,6 @@ const DashboardEditor = () => {
         children: [MotorPumpSVG],
       };
 
-      // const CustomSVGElement = joint.dia.Element.define("custom.SVGElement", {
-      //   size: { width: 124, height: 124 },
-      //   markup: [
-      //     MotorPumpSVG,
-      //     {
-      //       tagName: "circle",
-      //       selector: "portBody",
-      //     },
-      //   ],
-      //   ports: {
-      //     groups: {
-      //       in: {
-      //         position: {
-      //           name: "left",
-      //         },
-      //         attrs: {
-      //           portBody: {
-      //             magnet: "passive",
-      //             r: 6,
-      //             fill: "#22c55e",
-      //             stroke: "#000",
-      //           },
-      //         },
-      //       },
-      //       out: {
-      //         position: {
-      //           name: "right",
-      //         },
-      //         attrs: {
-      //           portBody: {
-      //             magnet: true,
-      //             r: 6,
-      //             fill: "#f97316",
-      //             stroke: "#000",
-      //           },
-      //         },
-      //       },
-      //     },
-      //   },
-      // });
-
-      // const element = new CustomSVGElement({
-      //   svg: MotorPumpSVG,
-      //   position: { x: 300, y: 150 },
-      //   ports: {
-      //     items: [
-      //       { id: "in1", group: "in" },
-      //       { id: "out1", group: "out" },
-      //     ],
-      //   },
-      // });
-
-      // graph.addCell(element);
-
       paper.on("link:mouseenter", (linkView) => {
         clearTimeout(timerRef.current);
         clearTools();
@@ -2379,7 +1762,6 @@ const DashboardEditor = () => {
           new dia.ToolsView({
             name: "onhover",
             tools: [
-              // new PortTargetArrowhead(),
               new joint.linkTools.Remove({
                 distance: -60,
                 markup: [
@@ -2454,7 +1836,6 @@ const DashboardEditor = () => {
         );
       });
 
-      // Function to add ports
       const addElementPort = (element, port, position) => {
         const portId = `P-${portIdCounterRef.current++}`;
         element.addPort({
@@ -2468,9 +1849,6 @@ const DashboardEditor = () => {
         return portId;
       };
 
-      // Create rectangle element
-
-      // Port Move Tool
       const PortHandle = mvc.View.extend({
         tagName: "rect",
         svgElement: true,
@@ -2487,10 +1865,10 @@ const DashboardEditor = () => {
           touchcancel: "onPointerUp",
         },
         attributes: {
-          width: 30, // New width
-          height: 30, // New height
-          x: -15, // To center the rectangle
-          y: -15, // To center the rectangle
+          width: 30,
+          height: 30,
+          x: -15,
+          y: -15,
           fill: "transparent",
           stroke: "#002b33",
           "stroke-width": 2,
@@ -2698,7 +2076,6 @@ const DashboardEditor = () => {
         },
       });
 
-      // Cleanup on unmount
       return () => {
         deviceSubscriptions.current.forEach((unsubscribe) => unsubscribe());
         deviceSubscriptions.current.clear();
@@ -2707,14 +2084,7 @@ const DashboardEditor = () => {
         stencil.remove();
       };
     },
-    [
-      // deviceEUIs,
-      // deviceIDs,
-      // selectedEUI,
-      // selectedDevice,
-      // isLoadingEUIs,
-      // isLoadingDeviceIDs,
-    ]
+    []
   );
 
   useEffect(() => {
@@ -2726,12 +2096,6 @@ const DashboardEditor = () => {
       }
     }
   }, [selectedValue]);
-
-  // const handleLabelChange = (value) => {
-  //   if (selectedCell) {
-  //     selectedCell.attr("label/text", value);
-  //   }
-  // };
 
   const handleLabelChange = (value) => {
     if (selectedCell) {
@@ -2753,44 +2117,27 @@ const DashboardEditor = () => {
         body: { ...currentAttrs.body, fill: value },
       });
       console.log("Fill color updated:", value);
-      setUpdateKey((prev) => prev + 1); // Force re-render
+      setUpdateKey((prev) => prev + 1);
     }
   };
-
-  //   const handleHeightChange = (value) => {
-  //   if (selectedCell) {
-  //     const currentAttrs = selectedCell.get("attrs") || {};
-  //     selectedCell.set("attrs", {
-  //       ...currentAttrs,
-  //       body: { ...currentAttrs.body, fill: value },
-  //     });
-  //     console.log("Fill color updated:", value);
-  //     setUpdateKey((prev) => prev + 1); // Force re-render
-  //   }
-  // };
 
   const handleEUIChange = (value) => {
     setSelectedEUI(value);
     setSelectedDevice(null);
     setDeviceData(null);
-
-    // Don't automatically subscribe until device is also selected
   };
 
   const handleDeviceChange = (value) => {
     setSelectedDevice(value);
 
     if (selectedCell && selectedEUI && value) {
-      // Get device model from the selected device
       const deviceModel = devices[value]?.model;
       const deviceModelName =
         deviceModels[deviceModel]?.name || "Unknown Device";
       console.log("deviceModelName", deviceModelName);
 
-      // Subscribe this cell to the selected device
       subscribeCellToDevice(selectedCell, selectedEUI, value, deviceModel);
 
-      // Update the device data display for inspector
       const cellId = getCellId(selectedCell);
       const cellData = cellDeviceData.current.get(cellId);
       setDeviceData(cellData);
@@ -2807,295 +2154,357 @@ const DashboardEditor = () => {
       const cellId = getCellId(selectedCell);
       const data = cellDeviceData.current.get(cellId);
       if (data) {
-        updateCellDisplay(selectedCell, data);
+      //  updateCellDisplay(selectedCell, data);
       }
     }
   };
 
-  return (
-    <Box sx={{ height: "100vh", display: "flex", flexDirection: "column" }}>
-      {/* Top Bar */}
-      <AppBar
-        position="static"
-        elevation={4}
-        sx={{
-          boxShadow:
-            "0px 3.8580212593px 7.7160425186px 0px rgba(0,0,0,.1019607843)",
-        }}
-      >
-        <Toolbar>
-          <Typography variant="h6" sx={{ flexGrow: 1 }}>
-            Dashboard Editor
-          </Typography>
+ return (
+    <>
+      <style>{`
+        @keyframes pulse {
+          0% { opacity: 0.7; transform: scale(0.95); }
+          50% { opacity: 1; transform: scale(1.05); }
+          100% { opacity: 0.7; transform: scale(0.95); }
+        }
+        
+        @keyframes rotate {
+    from { transform: rotate(0deg) }
+    to { transform: rotate(360deg)}
+  }
+  
+[data-animated="true"].rotate {
+  animation: spin 2s linear infinite;
+  transform-origin: center;
+  transform-box: fill-box; /* Ensures rotation around visual center */
+}
+        
+        @keyframes bounce {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-10px); }
+        }
+        
+        [data-animated="true"] {
+          animation: pulse 2s infinite;
+        }
+        
+        [data-animated="true"].rotate {
+          animation: rotate 4s linear infinite;
+        }
+        
+        [data-animated="true"].bounce {
+          animation: bounce 1s ease infinite;
+        }
+        
+        .animation-controls {
+          margin-top: 16px;
+          padding: 16px;
+          background: #f5f5f5;
+          border-radius: 4px;
+        }
+        
+        .animation-speed-slider {
+          width: 100%;
+          margin-top: 8px;
+        }
+      `}</style>
 
-          {/* Dropdown Button */}
-          <Button
-            color="inherit"
-            onClick={handleMenuClick}
-            endIcon={<ChevronDown size={16} />}
-            sx={{ textTransform: "none" }}
-          >
-            File
-          </Button>
-          <Menu
-            anchorEl={anchorEl}
-            open={Boolean(anchorEl)}
-            onClose={handleMenuClose}
-          >
-            <MenuItem onClick={handleNew}>New File</MenuItem>
-            <MenuItem onClick={handleSave}>Save File</MenuItem>
-            <MenuItem onClick={handleOpen}>Open File</MenuItem>
-            <MenuItem onClick={saveAsRoutine}>Save As File</MenuItem>
-          </Menu>
-
-          {/* Undo / Redo */}
-          <IconButton color="inherit" onClick={handleUndo}>
-            <Undo size={20} />
-          </IconButton>
-          <IconButton color="inherit" onClick={handleRedo}>
-            <Redo size={20} />
-          </IconButton>
-        </Toolbar>
-      </AppBar>
-
-      {/* Main Body: Stencil + Canvas + Inspector */}
-      <Box sx={{ display: "flex", flex: 1, overflow: "hidden" }}>
-        {/* Stencil Area */}
-        <Box
+      <Box sx={{ height: "100vh", display: "flex", flexDirection: "column" }}>
+        <AppBar
+          position="static"
+          elevation={4}
           sx={{
-            width: "250px",
-            borderRight: "1px solid #ccc",
-            backgroundColor: "#fff",
-            overflow: "hidden",
-            display: "flex",
-            flexDirection: "column",
+            boxShadow: "0px 3.8580212593px 7.7160425186px 0px rgba(0,0,0,.1019607843)",
           }}
         >
-          <Typography
-            variant="subtitle1"
-            sx={{ p: 2, borderBottom: "1px solid #eee" }}
-          >
-            Stencil Area
-          </Typography>
+          <Toolbar>
+            <Typography variant="h6" sx={{ flexGrow: 1 }}>
+              Dashboard Editor
+            </Typography>
+
+            <Button
+              color="inherit"
+              onClick={handleMenuClick}
+              endIcon={<ChevronDown size={16} />}
+              sx={{ textTransform: "none" }}
+            >
+              File
+            </Button>
+            <Menu
+              anchorEl={anchorEl}
+              open={Boolean(anchorEl)}
+              onClose={handleMenuClose}
+            >
+              <MenuItem onClick={handleNew}>New File</MenuItem>
+              <MenuItem onClick={handleSave}>Save File</MenuItem>
+              <MenuItem onClick={handleOpen}>Open File</MenuItem>
+              <MenuItem onClick={saveAsRoutine}>Save As File</MenuItem>
+            </Menu>
+
+            <IconButton color="inherit" onClick={handleUndo}>
+              <Undo size={20} />
+            </IconButton>
+            <IconButton color="inherit" onClick={handleRedo}>
+              <Redo size={20} />
+            </IconButton>
+          </Toolbar>
+        </AppBar>
+
+        <Box sx={{ display: "flex", flex: 1, overflow: "hidden" }}>
           <Box
-            ref={stencilContainerRef}
+            sx={{
+              width: "250px",
+              borderRight: "1px solid #ccc",
+              backgroundColor: "#fff",
+              overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            <Typography
+              variant="subtitle1"
+              sx={{ p: 2, borderBottom: "1px solid #eee" }}
+            >
+              Stencil Area
+            </Typography>
+            <Box
+              ref={stencilContainerRef}
+              sx={{
+                flex: 1,
+                overflow: "auto",
+                "& .joint-stencil": {
+                  height: "100%",
+                  fontFamily: "inherit",
+                },
+                "& .joint-stencil .group-label": {
+                  backgroundColor: "#f5f5f5",
+                  padding: "8px 12px",
+                  fontSize: "12px",
+                  fontWeight: "bold",
+                  borderBottom: "1px solid #ddd",
+                },
+              }}
+            />
+          </Box>
+
+          <Box
             sx={{
               flex: 1,
-              overflow: "auto",
-              "& .joint-stencil": {
-                height: "100%",
-                fontFamily: "inherit",
-              },
-              "& .joint-stencil .group-label": {
-                backgroundColor: "#f5f5f5",
-                padding: "8px 12px",
+              backgroundColor: "#f9f9f9",
+              position: "relative",
+              overflow: "hidden",
+            }}
+          >
+            <Typography
+              variant="subtitle1"
+              sx={{
+                position: "absolute",
+                top: 8,
+                left: 16,
+                zIndex: 1,
+                backgroundColor: "rgba(255,255,255,0.9)",
+                padding: "4px 8px",
+                borderRadius: "4px",
                 fontSize: "12px",
-                fontWeight: "bold",
-                borderBottom: "1px solid #ddd",
-              },
-            }}
-          />
-        </Box>
-
-        {/* Canvas Area */}
-        <Box
-          sx={{
-            flex: 1,
-            backgroundColor: "#f9f9f9",
-            position: "relative",
-            overflow: "hidden",
-          }}
-        >
-          <Typography
-            variant="subtitle1"
-            sx={{
-              position: "absolute",
-              top: 8,
-              left: 16,
-              zIndex: 1,
-              backgroundColor: "rgba(255,255,255,0.9)",
-              padding: "4px 8px",
-              borderRadius: "4px",
-              fontSize: "12px",
-              color: "#666",
-            }}
-          ></Typography>
-          <Box
-            ref={paperContainerRef}
-            sx={{
-              width: "100%",
-              height: "100%",
-              "& .joint-paper": {
-                border: "none",
-              },
-              "& .joint-paper svg": {
+                color: "#666",
+              }}
+            ></Typography>
+            <Box
+              ref={paperContainerRef}
+              sx={{
                 width: "100%",
                 height: "100%",
-              },
-            }}
-          />
-        </Box>
-
-        {/* Inspector Area */}
-        <Box
-          sx={{
-            width: "250px",
-            borderLeft: "1px solid #ccc",
-            backgroundColor: "#fff",
-            overflow: "hidden",
-            display: "flex",
-            flexDirection: "column",
-          }}
-        >
-          <Typography
-            variant="subtitle1"
-            sx={{ p: 2, borderBottom: "1px solid #eee" }}
-          >
-            Inspector
-          </Typography>
-
-          {selectedCell && (
-            <Box
-              sx={{
-                // width: "300px",
-                p: 2,
-                borderLeft: "1px solid #ccc",
-                backgroundColor: "#fafafa",
-                display: "flex",
-                flexDirection: "column",
-                gap: 2,
+                "& .joint-paper": {
+                  border: "none",
+                },
+                "& .joint-paper svg": {
+                  width: "100%",
+                  height: "100%",
+                },
               }}
+            />
+          </Box>
+
+          <Box
+            sx={{
+              width: "250px",
+              borderLeft: "1px solid #ccc",
+              backgroundColor: "#fff",
+              overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            <Typography
+              variant="subtitle1"
+              sx={{ p: 2, borderBottom: "1px solid #eee" }}
             >
-              {/* <Typography variant="h6">Inspector</Typography> */}
-              <TextField
-                label="Label"
-                value={selectedCell.get("attrs")?.label?.text || ""}
-                onChange={(e) => handleLabelChange(e.target.value)}
-                fullWidth
-                variant="outlined"
-              />
+              Inspector
+            </Typography>
 
-              <TextField
-                label="Fill Color"
-                type="color"
-                value={selectedCell.get("attrs")?.body?.fill || "#ffffff"}
-                onChange={(e) => handleFillColorChange(e.target.value)}
-                fullWidth
-                variant="outlined"
-              />
-
-              {/* <TextField
-                label="Label"
-                value={selectedCell.attr("label/text") || ""}
-                onChange={(e) =>
-                  selectedCell.attr("label/text", e.target.value)
-                }
-                fullWidth
-                variant="outlined"
-              />
-
-              <TextField
-                label="Fill Color"
-                type="color"
-                value={selectedCell.attr("body/fill") || "#ffffff"}
-                onChange={(e) => selectedCell.attr("body/fill", e.target.value)}
-                fullWidth
-                variant="outlined"
-              /> */}
-
-              <FormControl fullWidth variant="outlined">
-                <InputLabel>Device EUI</InputLabel>
-                <Select
-                  value={selectedEUI}
-                  onChange={(e) => handleEUIChange(e.target.value)}
-                  label="Device EUI"
-                >
-                  <MenuItem value="">-- Select EUI --</MenuItem>
-                  {Object.entries(deviceModels).map(([eui, model]) => (
-                    <MenuItem key={eui} value={eui}>
-                      {model.name} ({eui})
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-
-              <FormControl fullWidth variant="outlined" disabled={!selectedEUI}>
-                <InputLabel>Device ID</InputLabel>
-                <Select
-                  value={selectedDevice}
-                  onChange={(e) => handleDeviceChange(e.target.value)}
-                  label="Device ID"
-                >
-                  <MenuItem value="">-- Select Device ID --</MenuItem>
-                  {Object.entries(devices).map(([id, device]) => (
-                    <MenuItem key={id} value={id}>
-                      {device.name || id}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-
-              {/* Data Display Options */}
-              {selectedDevice && Object.keys(payload).length > 0 && (
-                <FormControl component="fieldset">
-                  <Typography variant="subtitle2">Display Value:</Typography>
-                  <RadioGroup
-                    value={selectedValue}
-                    onChange={handleValueChange}
-                  >
-                    {availableValues.map((value) => (
-                      <FormControlLabel
-                        key={value}
-                        value={value}
-                        control={<Radio size="small" />}
-                        label={value}
-                      />
-                    ))}
-                  </RadioGroup>
-                </FormControl>
-              )}
-
-              {/* <Box sx={{ mt: 1 }}>
-                <Typography variant="subtitle2" fontWeight="bold">
-                  Temperature:
-                </Typography>
-                <Typography variant="body2">
-                  {deviceData?.decoded_payload?.temperature ?? "N/A"} °C
-                </Typography>
-              </Box> */}
+            {selectedCell && (
               <Box
-                ref={inspectorContainerRef}
                 sx={{
-                  flex: 1,
-                  overflow: "auto",
-                  padding: "10px",
-                  background: "#f5f5f5",
-                }}
-              />
-
-              {/* <Box sx={{ mt: 2 }}>
-              <Typography variant="subtitle1" fontWeight="bold">
-                Live Device Data:
-              </Typography>
-              <Box
-                component="pre"
-                sx={{
-                  fontSize: "12px",
-                  backgroundColor: "#f3f3f3",
-                  p: 1,
-                  borderRadius: 1,
-                  overflow: "auto",
+                  p: 2,
+                  borderLeft: "1px solid #ccc",
+                  backgroundColor: "#fafafa",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 2,
                 }}
               >
-                {deviceData ? JSON.stringify(deviceData, null, 2) : "No data"}
+                <TextField
+                  label="Label"
+                  value={selectedCell.get("attrs")?.label?.text || ""}
+                  onChange={(e) => handleLabelChange(e.target.value)}
+                  fullWidth
+                  variant="outlined"
+                />
+
+                <TextField
+                  label="Fill Color"
+                  type="color"
+                  value={selectedCell.get("attrs")?.body?.fill || "#ffffff"}
+                  onChange={(e) => handleFillColorChange(e.target.value)}
+                  fullWidth
+                  variant="outlined"
+                />
+
+                <FormControl fullWidth variant="outlined">
+                  <InputLabel>Device EUI</InputLabel>
+                  <Select
+                    value={selectedEUI}
+                    onChange={(e) => handleEUIChange(e.target.value)}
+                    label="Device EUI"
+                  >
+                    <MenuItem value="">-- Select EUI --</MenuItem>
+                    {Object.entries(deviceModels).map(([eui, model]) => (
+                      <MenuItem key={eui} value={eui}>
+                        {model.name} ({eui})
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+
+                <FormControl fullWidth variant="outlined" disabled={!selectedEUI}>
+                  <InputLabel>Device ID</InputLabel>
+                  <Select
+                    value={selectedDevice}
+                    onChange={(e) => handleDeviceChange(e.target.value)}
+                    label="Device ID"
+                  >
+                    <MenuItem value="">-- Select Device ID --</MenuItem>
+                    {Object.entries(devices).map(([id, device]) => (
+                      <MenuItem key={id} value={id}>
+                        {device.name || id}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+{selectedDevice && Object.keys(payload).length > 0 && (
+  <FormControl component="fieldset" fullWidth>
+    <Typography variant="subtitle2">Display Value:</Typography>
+    <Select
+      value={selectedValue}
+      onChange={handleValueChange}
+      size="small"
+      displayEmpty
+    >
+      {availableValues.map((value) => (
+        <MenuItem key={value} value={value}>
+          {value}
+        </MenuItem>
+      ))}
+    </Select>
+  </FormControl>
+)}
+                {/* {selectedDevice && Object.keys(payload).length > 0 && (
+                  <FormControl component="fieldset">
+                    <Typography variant="subtitle2">Display Value:</Typography>
+                    <RadioGroup
+                      value={selectedValue}
+                      onChange={handleValueChange}
+                    >
+                      {availableValues.map((value) => (
+                        <FormControlLabel
+                          key={value}
+                          value={value}
+                          control={<Radio size="small" />}
+                          label={value}
+                        />
+                      ))}
+                    </RadioGroup>
+                  </FormControl>
+                )} */}
+
+                <Box className="animation-controls">
+                  <Typography variant="subtitle2">Animation Controls</Typography>
+                  
+                  <FormControl fullWidth sx={{ mb: 2, mt: 1 }}>
+                    <InputLabel>Animation Type</InputLabel>
+                    <Select
+                      value={animationType}
+                      onChange={handleAnimationTypeChange}
+                      label="Animation Type"
+                    >
+                      <MenuItem value="pulse">Pulse</MenuItem>
+                      <MenuItem value="rotate">Rotate</MenuItem>
+                      <MenuItem value="bounce">Bounce</MenuItem>
+                      <MenuItem value="flow">Flow</MenuItem>
+                    </Select>
+                  </FormControl>
+
+                  <Typography variant="body2" sx={{ mt: 1 }}>Animation Speed</Typography>
+                  <input
+                    type="range"
+                    min="0.5"
+                    max="3"
+                    step="0.1"
+                    value={animationSpeed}
+                    onChange={handleAnimationSpeedChange}
+                    className="animation-speed-slider"
+                  />
+                  <Typography variant="caption" display="block" textAlign="center">
+                    {animationSpeed.toFixed(1)}x
+                  </Typography>
+
+                  <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
+                    <Button 
+                      variant="contained" 
+                      onClick={handleStartAnimation}
+                      fullWidth
+                      size="small"
+                    >
+                      Start
+                    </Button>
+                    <Button 
+                      variant="outlined" 
+                      onClick={handleStopAnimation}
+                      fullWidth
+                      size="small"
+                    >
+                      Stop
+                    </Button>
+                  </Box>
+                </Box>
+
+                <Box
+                  ref={inspectorContainerRef}
+                  sx={{
+                    flex: 1,
+                    overflow: "auto",
+                    padding: "10px",
+                    background: "#f5f5f5",
+                  }}
+                />
               </Box>
-            </Box> */}
-            </Box>
-          )}
+            )}
+          </Box>
         </Box>
       </Box>
-    </Box>
+    </>
   );
 };
+
 
 export default DashboardEditor;
