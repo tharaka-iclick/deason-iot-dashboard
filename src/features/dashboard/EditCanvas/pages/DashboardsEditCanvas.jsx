@@ -19,7 +19,7 @@ import {
 import { ChevronDown, Undo, Redo } from "lucide-react";
 import {
   Pipe01,
-  PipeView01,
+  // PipeView01,
   createPipe,
 } from "../../../Widgets/PortLinks/PipeLink";
 import * as joint from "@joint/plus";
@@ -46,9 +46,124 @@ import {
   uploadString,
   getDownloadURL,
 } from "firebase/storage";
-import { isEqual } from 'lodash';
+import { isEqual } from "lodash";
+
+const FLOW_FLAG = "flow";
+const LIQUID_COLOR = "#007acc";
+
+class Pipe extends joint.dia.Link {
+  defaults() {
+    return {
+      ...super.defaults,
+      type: "Pipe",
+      z: -1,
+      router: { name: "rightAngle" },
+      flow: 1,
+      attrs: {
+        liquid: {
+          connection: true,
+          stroke: LIQUID_COLOR,
+          strokeWidth: 10,
+          strokeLinejoin: "round",
+          strokeLinecap: "square",
+          strokeDasharray: "10,20",
+        },
+        line: {
+          connection: true,
+          stroke: "#eee",
+          strokeWidth: 10,
+          strokeLinejoin: "round",
+          strokeLinecap: "round",
+        },
+        outline: {
+          connection: true,
+          stroke: "#444",
+          strokeWidth: 16,
+          strokeLinejoin: "round",
+          strokeLinecap: "round",
+        },
+      },
+    };
+  }
+
+  preinitialize() {
+    this.markup = joint.util.svg/* xml */ `
+            <path @selector="outline" fill="none"/>
+            <path @selector="line" fill="none"/>
+            <path @selector="liquid" fill="none"/>
+        `;
+  }
+}
+
+const PipeView = joint.dia.LinkView.extend({
+  presentationAttributes: joint.dia.LinkView.addPresentationAttributes({
+    flow: [FLOW_FLAG],
+  }),
+
+  initFlag: [...joint.dia.LinkView.prototype.initFlag, FLOW_FLAG],
+
+  flowAnimation: null,
+
+  confirmUpdate(...args) {
+    let flags = joint.dia.LinkView.prototype.confirmUpdate.call(this, ...args);
+    if (this.hasFlag(flags, FLOW_FLAG)) {
+      this.updateFlow();
+      flags = this.removeFlag(flags, FLOW_FLAG);
+    }
+    return flags;
+  },
+
+  getFlowAnimation() {
+    let { flowAnimation } = this;
+    if (flowAnimation) return flowAnimation;
+    // const [liquidEl] = this.findBySelector("liquid");
+
+    const liquidEl =
+      this.findBySelector("liquid")[0] ||
+      this.el.querySelector('[joint-selector="liquid"]') ||
+      this.el.querySelector('path[selector="liquid"]');
+
+    console.log("liquidEl:", liquidEl);
+    // stroke-dashoffset = sum(stroke-dasharray) * n;
+    // 90 = 10 + 20 + 10 + 20 + 10 + 20
+
+    if (!liquidEl) {
+      console.error(
+        "liquidEl element not found! Available elements:",
+        this.el.innerHTML
+      );
+      return null;
+    }
+    const keyframes = { strokeDashoffset: [90, 0] };
+    flowAnimation = liquidEl.animate(keyframes, {
+      fill: "forwards",
+      duration: 1000,
+      iterations: Infinity,
+      easing: "linear",
+    });
+    this.flowAnimation = flowAnimation;
+    return flowAnimation;
+  },
+
+  updateFlow() {
+    const flow = this.model.get("flow");
+    if (flow) {
+      this.getFlowAnimation().play();
+    } else {
+      this.getFlowAnimation().pause();
+    }
+  },
+
+  onRemove() {
+    if (this.flowAnimation) {
+      this.flowAnimation.cancel();
+    }
+    joint.dia.LinkView.prototype.onRemove.apply(this, arguments);
+  },
+});
+
 class TemplateImage extends joint.dia.Element {
-defaults() {
+  defaults() {
     return {
       ...super.defaults,
       type: "TemplateImage",
@@ -56,8 +171,8 @@ defaults() {
         image: {
           width: "calc(w)",
           height: "calc(h)",
-          'data-animated': false,
-          'class': ''
+          "data-animated": false,
+          class: "",
         },
         label: {
           textVerticalAnchor: "top",
@@ -84,7 +199,6 @@ defaults() {
     this.setImageColor();
   }
 
-
   setImageColor() {
     const svg = this.get("svg") || "";
     const color = this.get("color") || "red";
@@ -93,56 +207,56 @@ defaults() {
       this.dataURLPrefix + encodeURIComponent(svg.replace(/\$color/g, color))
     );
   }
-    startAnimation(type = 'pulse') {
-    this.attr('image/data-animated', true);
-    this.attr('image/class', type);
-    this.trigger('animation:start');
+  startAnimation(type = "pulse") {
+    this.attr("image/data-animated", true);
+    this.attr("image/class", type);
+    this.trigger("animation:start");
     return this;
   }
 
   stopAnimation() {
-    this.attr('image/data-animated', false);
-    this.attr('image/class', '');
-    this.trigger('animation:stop');
+    this.attr("image/data-animated", false);
+    this.attr("image/class", "");
+    this.trigger("animation:stop");
     return this;
   }
-    pulse() {
-    return this.startAnimation('pulse');
+  pulse() {
+    return this.startAnimation("pulse");
   }
 
   rotate() {
-    return this.startAnimation('rotate');
+    return this.startAnimation("rotate");
   }
 
   flowAnimation() {
-    this.transition('attrs/image/x', 10, {
+    this.transition("attrs/image/x", 10, {
       delay: 0,
       duration: 1000,
       valueFunction: joint.util.interpolate.number(0, 10),
-      timingFunction: joint.util.timing.linear
+      timingFunction: joint.util.timing.linear,
     });
-    
-    this.transition('attrs/image/y', 10, {
+
+    this.transition("attrs/image/y", 10, {
       delay: 1000,
       duration: 1000,
       valueFunction: joint.util.interpolate.number(0, 10),
-      timingFunction: joint.util.timing.linear
+      timingFunction: joint.util.timing.linear,
     });
-    
-    this.transition('attrs/image/x', 0, {
+
+    this.transition("attrs/image/x", 0, {
       delay: 2000,
       duration: 1000,
       valueFunction: joint.util.interpolate.number(10, 0),
-      timingFunction: joint.util.timing.linear
+      timingFunction: joint.util.timing.linear,
     });
-    
-    this.transition('attrs/image/y', 0, {
+
+    this.transition("attrs/image/y", 0, {
       delay: 3000,
       duration: 1000,
       valueFunction: joint.util.interpolate.number(10, 0),
-      timingFunction: joint.util.timing.linear
+      timingFunction: joint.util.timing.linear,
     });
-    
+
     return this;
   }
 }
@@ -179,21 +293,23 @@ const DashboardEditor = () => {
 
   const handleStartAnimation = () => {
     if (!selectedCell) return;
-    
-    switch(animationType) {
-      case 'pulse':
+
+    switch (animationType) {
+      case "pulse":
         selectedCell.pulse();
         break;
-      case 'rotate':
+      case "rotate":
         selectedCell.rotate();
         break;
-      case 'flow':
+      case "flow":
         selectedCell.flowAnimation();
         break;
       default:
         selectedCell.startAnimation(animationType);
     }
-        const imageEl = document.querySelector(`[model-id="${selectedCell.id}"] image`);
+    const imageEl = document.querySelector(
+      `[model-id="${selectedCell.id}"] image`
+    );
     if (imageEl) {
       imageEl.style.animationDuration = `${2 / animationSpeed}s`;
     }
@@ -202,16 +318,18 @@ const DashboardEditor = () => {
   const handleAnimationSpeedChange = (event) => {
     const speed = parseFloat(event.target.value);
     setAnimationSpeed(speed);
-    
-    if (selectedCell && selectedCell.attr('image/data-animated')) {
-      const imageEl = document.querySelector(`[model-id="${selectedCell.id}"] image`);
+
+    if (selectedCell && selectedCell.attr("image/data-animated")) {
+      const imageEl = document.querySelector(
+        `[model-id="${selectedCell.id}"] image`
+      );
       if (imageEl) {
         imageEl.style.animationDuration = `${2 / speed}s`;
       }
     }
   };
 
-    const handleStopAnimation = () => {
+  const handleStopAnimation = () => {
     if (selectedCell) {
       selectedCell.stopAnimation();
     }
@@ -236,51 +354,53 @@ const DashboardEditor = () => {
     if (!cell || !data) return;
 
     const payload = data || {};
-   // const value = payload[selectedValue];
+    // const value = payload[selectedValue];
 
     console.log("payload01", data);
- console.log("asas selectedEUI", selectedEUI);
-  console.log("asas selectedDevice", selectedDevice);
+    console.log("asas selectedEUI", selectedEUI);
+    console.log("asas selectedDevice", selectedDevice);
     console.log("asas selectedValue", selectedValue);
- const unsubscribe = listenForSensoreData(selectedEUI, selectedDevice,selectedValue, (value) => {
-         if (typeof value !== "undefined") {
-      const modelName = selectedValue || "Device";
-      cell.attr("label/text", `${modelName}: ${value}`);
-      console.log("value2", value);
+    const unsubscribe = listenForSensoreData(
+      selectedEUI,
+      selectedDevice,
+      selectedValue,
+      (value) => {
+        if (typeof value !== "undefined") {
+          const modelName = selectedValue || "Device";
+          cell.attr("label/text", `${modelName}: ${value}`);
+          console.log("value2", value);
 
-                if (value=="open") {
-           selectedCell.rotate();
-               const imageEl = document.querySelector(`[model-id="${selectedCell.id}"] image`);
-    if (imageEl) {
-      imageEl.style.animationDuration = `${2 / animationSpeed}s`;
-    }}
-     else {
-   if (selectedCell) {
-  // selectedCell.stopAnimation();
-    }
-   
-      }
-      if (typeof value === "number") {
-        const range = deviceModels[cell.prop("custom/deviceModel")]?.range || [
-          0, 100,
-        ];
-        const normalizedValue = Math.min(
-          Math.max((value - range[0]) / (range[1] - range[0]), 0),
-          1
-        );
+          if (value == "open") {
+            selectedCell.rotate();
+            const imageEl = document.querySelector(
+              `[model-id="${selectedCell.id}"] image`
+            );
+            if (imageEl) {
+              imageEl.style.animationDuration = `${2 / animationSpeed}s`;
+            }
+          } else {
+            if (selectedCell) {
+              // selectedCell.stopAnimation();
+            }
+          }
+          if (typeof value === "number") {
+            const range = deviceModels[cell.prop("custom/deviceModel")]
+              ?.range || [0, 100];
+            const normalizedValue = Math.min(
+              Math.max((value - range[0]) / (range[1] - range[0]), 0),
+              1
+            );
             console.log("normalizedValue", normalizedValue);
-        const hue = (1 - normalizedValue) * 120; // Green (0) to Red (120)
-        cell.attr("body/fill", `hsl(${hue}, 100%, 80%)`);
-
-      } else {
-        cell.attr("body/fill", "#e0e0e0");
-   
+            const hue = (1 - normalizedValue) * 120; // Green (0) to Red (120)
+            cell.attr("body/fill", `hsl(${hue}, 100%, 80%)`);
+          } else {
+            cell.attr("body/fill", "#e0e0e0");
+          }
+        }
       }
-    }
-     
-      });
-      
-   unsubscribe();
+    );
+
+    unsubscribe();
   };
   const subscribeCellToDevice = (cell, eui, deviceId, deviceModel) => {
     const cellId = getCellId(cell);
@@ -291,35 +411,33 @@ const DashboardEditor = () => {
     }
 
     if (eui && deviceId) {
-  const fetchDevicePayload = async () => {
-    if (eui && deviceId) {
-      try {
-        const data = await getDevicePayload(eui, deviceId);
-        console.log(`Device data for cell ${cellId}:`, data);
-        cellDeviceData.current.set(cellId, data);
-        setPayload(data);
+      const fetchDevicePayload = async () => {
+        if (eui && deviceId) {
+          try {
+            const data = await getDevicePayload(eui, deviceId);
+            console.log(`Device data for cell ${cellId}:`, data);
+            cellDeviceData.current.set(cellId, data);
+            setPayload(data);
 
-        const payloadKeys = Object.keys(data || {});
-        if (payloadKeys.length > 0) {
-          setAvailableValues(payloadKeys);
-          console.log("payloadKeys", payloadKeys);
-  console.log("selectedValuew", selectedValue);
-          if (!selectedValue || !payloadKeys.includes(selectedValue)) {
-            setSelectedValue(payloadKeys);
+            const payloadKeys = Object.keys(data || {});
+            if (payloadKeys.length > 0) {
+              setAvailableValues(payloadKeys);
+              console.log("payloadKeys", payloadKeys);
+              console.log("selectedValuew", selectedValue);
+              if (!selectedValue || !payloadKeys.includes(selectedValue)) {
+                setSelectedValue(payloadKeys);
+              }
+            }
+            //updateCellDisplay(cell, data);
+            // Do something with the payload
+          } catch (error) {
+            console.error("Error fetching device payload:", error);
           }
         }
-        //updateCellDisplay(cell, data);
-        // Do something with the payload
-      } catch (error) {
-        console.error("Error fetching device payload:", error);
-      }
-    }
-  };
-       fetchDevicePayload();
-       
- 
+      };
+      fetchDevicePayload();
 
-     // deviceSubscriptions.current.set(cellId, unsubscribe);
+      // deviceSubscriptions.current.set(cellId, unsubscribe);
 
       cell.prop("custom/deviceEUI", eui);
       cell.prop("custom/deviceID", deviceId);
@@ -334,46 +452,41 @@ const DashboardEditor = () => {
     cellDeviceData.current.delete(cellId);
   };
 
-
-  
-
-
-
-useEffect(() => {
-  const fetchDeviceModels = async () => {
-    try {
-      const models = await getDeviceModels();
-      console.log("Fetched device models:", models);
-      setDeviceModels(models);
-      const euis = Object.keys(models);
-      console.log("Fetched EUIs:", euis);
-      setDeviceEUIs(euis);
-    } catch (error) {
-      console.error("Error fetching device models:", error);
-    }
-  };
-
-  fetchDeviceModels();
-}, []);
-
-useEffect(() => {
-  const fetchDevice = async () => {
-    if (selectedEUI) {
+  useEffect(() => {
+    const fetchDeviceModels = async () => {
       try {
-        console.log("Fetching Devices for EUI:", selectedEUI);
-        const newdevices = await getDevice(selectedEUI);
-        console.log("Fetched Devices:", newdevices);
-        setDevices(newdevices);
+        const models = await getDeviceModels();
+        console.log("Fetched device models:", models);
+        setDeviceModels(models);
+        const euis = Object.keys(models);
+        console.log("Fetched EUIs:", euis);
+        setDeviceEUIs(euis);
       } catch (error) {
-        console.error("Error fetching device:", error);
+        console.error("Error fetching device models:", error);
       }
-    } else {
-      setDevices({});
-    }
-  };
+    };
 
-  fetchDevice();
-}, [selectedEUI]);
+    fetchDeviceModels();
+  }, []);
+
+  useEffect(() => {
+    const fetchDevice = async () => {
+      if (selectedEUI) {
+        try {
+          console.log("Fetching Devices for EUI:", selectedEUI);
+          const newdevices = await getDevice(selectedEUI);
+          console.log("Fetched Devices:", newdevices);
+          setDevices(newdevices);
+        } catch (error) {
+          console.error("Error fetching device:", error);
+        }
+      } else {
+        setDevices({});
+      }
+    };
+
+    fetchDevice();
+  }, [selectedEUI]);
 
   const logsContainerRef = useRef(null);
   const lastViewRef = useRef(null);
@@ -529,336 +642,414 @@ useEffect(() => {
   const [isLoadingEUIs, setIsLoadingEUIs] = useState(true);
   const [isLoadingDeviceIDs, setIsLoadingDeviceIDs] = useState(false);
 
-  useEffect(
-    () => {
-      const { dia, shapes, mvc, ui, highlighters, util } = joint;
-      const namespace = {
-        ...shapes,
-        TemplateImage,
-        Pipe01,
-      };
-      const graph = new dia.Graph({}, { cellNamespace: namespace });
-      const commandManager = new dia.CommandManager({ graph: graph });
-      commandManagerRef.current = commandManager;
+  useEffect(() => {
+    const { dia, shapes, mvc, ui, highlighters, util } = joint;
+    const namespace = {
+      ...shapes,
+      TemplateImage,
+      Pipe,
+      PipeView,
+    };
+    const graph = new dia.Graph({}, { cellNamespace: namespace });
+    const commandManager = new dia.CommandManager({ graph: graph });
+    commandManagerRef.current = commandManager;
 
-      commandManager.on("stack:push", (cmd) => {
-        const cmdId = joint.util.uuid();
-        cmd.forEach((c) => (c.id = cmdId));
-      });
+    commandManager.on("stack:push", (cmd) => {
+      const cmdId = joint.util.uuid();
+      cmd.forEach((c) => (c.id = cmdId));
+    });
 
-      commandManager.on("stack", () => {
-        if (currentFileHandle) {
-          setCurrentFileName((prev) =>
-            isSaved(commandManager, currentCmdId)
-              ? prev.replace("*", "")
-              : prev.replace("*", "") + "*"
+    commandManager.on("stack", () => {
+      if (currentFileHandle) {
+        setCurrentFileName((prev) =>
+          isSaved(commandManager, currentCmdId)
+            ? prev.replace("*", "")
+            : prev.replace("*", "") + "*"
+        );
+      }
+    });
+
+    const paper = new dia.Paper({
+      model: graph,
+      cellViewNamespace: namespace,
+      width: "100%",
+      height: "100%",
+      gridSize: 20,
+      drawGrid: { name: "mesh" },
+      async: true,
+      sorting: dia.Paper.sorting.APPROX,
+      background: { color: "#F3F7F6" },
+      defaultLink: () => {
+        const linkIdNumber = ++linkIdCounter;
+        return new Pipe();
+      },
+      defaultConnectionPoint: { name: "boundary" },
+      clickThreshold: 10,
+      magnetThreshold: "onleave",
+      linkPinning: false,
+      validateMagnet: (sourceView, sourceMagnet) => {
+        const sourceGroup = sourceView.findAttribute(
+          "port-group",
+          sourceMagnet
+        );
+        const sourcePort = sourceView.findAttribute("port", sourceMagnet);
+        const source = sourceView.model;
+
+        if (sourceGroup !== "out") {
+          log(
+            "paper<validateMagnet>",
+            "It's not possible to create a link from an inbound port."
           );
+          return false;
         }
-      });
 
-      const paper = new dia.Paper({
-        model: graph,
-        cellViewNamespace: namespace,
-        width: "100%",
-        height: "100%",
-        gridSize: 20,
-        drawGrid: { name: "mesh" },
-        async: true,
-        sorting: dia.Paper.sorting.APPROX,
-        background: { color: "#F3F7F6" },
-        defaultLink: () => {
-          const linkIdNumber = ++linkIdCounter;
-          return createPipe(linkIdNumber);
-        },
-        defaultConnectionPoint: { name: "boundary" },
-        clickThreshold: 10,
-        magnetThreshold: "onleave",
-        linkPinning: false,
-        validateMagnet: (sourceView, sourceMagnet) => {
-          const sourceGroup = sourceView.findAttribute(
-            "port-group",
-            sourceMagnet
+        if (
+          graph
+            .getConnectedLinks(source, { outbound: true })
+            .find((link) => link.source().port === sourcePort)
+        ) {
+          log(
+            "paper<validateMagnet>",
+            "The port has already an outbound link (we allow only one link per port)"
           );
-          const sourcePort = sourceView.findAttribute("port", sourceMagnet);
-          const source = sourceView.model;
+          return false;
+        }
 
-          if (sourceGroup !== "out") {
-            log(
-              "paper<validateMagnet>",
-              "It's not possible to create a link from an inbound port."
-            );
-            return false;
-          }
+        return true;
+      },
+      validateConnection: (
+        sourceView,
+        sourceMagnet,
+        targetView,
+        targetMagnet
+      ) => {
+        if (sourceView === targetView) return false;
 
-          if (
-            graph
-              .getConnectedLinks(source, { outbound: true })
-              .find((link) => link.source().port === sourcePort)
-          ) {
-            log(
-              "paper<validateMagnet>",
-              "The port has already an outbound link (we allow only one link per port)"
-            );
-            return false;
-          }
-
-          return true;
-        },
-        validateConnection: (
-          sourceView,
-          sourceMagnet,
-          targetView,
+        const targetGroup = targetView.findAttribute(
+          "port-group",
           targetMagnet
-        ) => {
-          if (sourceView === targetView) return false;
+        );
+        const targetPort = targetView.findAttribute("port", targetMagnet);
+        const target = targetView.model;
 
-          const targetGroup = targetView.findAttribute(
-            "port-group",
-            targetMagnet
-          );
-          const targetPort = targetView.findAttribute("port", targetMagnet);
-          const target = targetView.model;
+        if (target.isLink()) return false;
+        if (targetGroup !== "in") return false;
 
-          if (target.isLink()) return false;
-          if (targetGroup !== "in") return false;
+        if (
+          graph
+            .getConnectedLinks(target, { inbound: true })
+            .find((link) => link.target().port === targetPort)
+        ) {
+          return false;
+        }
 
-          if (
-            graph
-              .getConnectedLinks(target, { inbound: true })
-              .find((link) => link.target().port === targetPort)
-          ) {
-            return false;
-          }
+        return true;
+      },
+      snapLinks: { radius: 10 },
+      snapLabels: true,
+      markAvailable: true,
+    });
 
-          return true;
+    paperRef.current = paper;
+    paperContainerRef.current.appendChild(paper.el);
+
+    paper.on("element:pointerclick", (elementView) => {
+      const cell = elementView.model;
+      if (inspectorInstanceRef.current) {
+        inspectorInstanceRef.current.remove();
+      }
+      setSelectedCell(cell);
+
+      const cellEUI = cell.prop("custom/deviceEUI");
+      const cellDeviceID = cell.prop("custom/deviceID");
+
+      if (cellEUI) {
+        setSelectedEUI(cellEUI);
+        if (cellDeviceID) {
+          setSelectedDevice(cellDeviceID);
+        }
+      }
+
+      console.log(
+        "Rendering inspector with deviceEUIs:",
+        deviceEUIs,
+        "and deviceIDs:",
+        deviceIDs
+      );
+      console.log("Inspector inputs configuration:", {
+        deviceEUI: {
+          options:
+            (deviceEUIs || []).length > 0
+              ? deviceEUIs.map((eui) => ({ value: eui, content: eui }))
+              : [{ value: "", content: "No EUIs available" }],
+          disabled: !deviceEUIs || deviceEUIs.length === 0,
         },
-        snapLinks: { radius: 10 },
-        snapLabels: true,
-        markAvailable: true,
+        deviceID: {
+          options:
+            (deviceIDs || []).length > 0
+              ? deviceIDs.map((id) => ({ value: id, content: id }))
+              : [{ value: "", content: "No Device IDs available" }],
+          disabled: !deviceIDs || deviceIDs.length === 0 || !selectedEUI,
+        },
       });
 
-      paperRef.current = paper;
-      paperContainerRef.current.appendChild(paper.el);
-
-      paper.on("element:pointerclick", (elementView) => {
-        const cell = elementView.model;
-        if (inspectorInstanceRef.current) {
-          inspectorInstanceRef.current.remove();
-        }
-        setSelectedCell(cell);
-
-        const cellEUI = cell.prop("custom/deviceEUI");
-        const cellDeviceID = cell.prop("custom/deviceID");
-
-        if (cellEUI) {
-          setSelectedEUI(cellEUI);
-          if (cellDeviceID) {
-            setSelectedDevice(cellDeviceID);
-          }
-        }
-
-        console.log(
-          "Rendering inspector with deviceEUIs:",
-          deviceEUIs,
-          "and deviceIDs:",
-          deviceIDs
-        );
-        console.log("Inspector inputs configuration:", {
-          deviceEUI: {
-            options:
-              (deviceEUIs || []).length > 0
-                ? deviceEUIs.map((eui) => ({ value: eui, content: eui }))
-                : [{ value: "", content: "No EUIs available" }],
-            disabled: !deviceEUIs || deviceEUIs.length === 0,
+      inspectorInstanceRef.current = joint.ui.Inspector.create(
+        inspectorContainerRef.current,
+        {
+          cell,
+          inputs: {
+            "size/width": {
+              type: "number",
+              label: "Width",
+              min: 50,
+              max: 500,
+              group: "size",
+            },
+            "size/height": {
+              type: "number",
+              label: "Height",
+              min: 50,
+              max: 500,
+              group: "size",
+            },
           },
-          deviceID: {
-            options:
-              (deviceIDs || []).length > 0
-                ? deviceIDs.map((id) => ({ value: id, content: id }))
-                : [{ value: "", content: "No Device IDs available" }],
-            disabled: !deviceIDs || deviceIDs.length === 0 || !selectedEUI,
+          groups: {
+            text: { label: "Text Properties", index: 1 },
+            appearance: { label: "Appearance", index: 2 },
+            size: { label: "Size", index: 3 },
+            device: { label: "Device Settings", index: 4 },
+            actions: { label: "Actions", index: 5 },
           },
-        });
+          groupState: {
+            text: { open: true },
+            appearance: { open: true },
+            size: { open: true },
+            device: { open: true },
+            actions: { open: true },
+          },
+        }
+      );
+    });
 
-        inspectorInstanceRef.current = joint.ui.Inspector.create(
-          inspectorContainerRef.current,
-          {
-            cell,
-            inputs: {
-              "size/width": {
-                type: "number",
-                label: "Width",
-                min: 50,
-                max: 500,
-                group: "size",
-              },
-              "size/height": {
-                type: "number",
-                label: "Height",
-                min: 50,
-                max: 500,
-                group: "size",
-              },
-            },
-            groups: {
-              text: { label: "Text Properties", index: 1 },
-              appearance: { label: "Appearance", index: 2 },
-              size: { label: "Size", index: 3 },
-              device: { label: "Device Settings", index: 4 },
-              actions: { label: "Actions", index: 5 },
-            },
-            groupState: {
-              text: { open: true },
-              appearance: { open: true },
-              size: { open: true },
-              device: { open: true },
-              actions: { open: true },
-            },
-          }
-        );
-      });
+    paper.on("element:magnet:pointerclick", (elementView, evt, magnet) => {
+      paper.removeTools();
+      elementView.addTools(new dia.ToolsView({ tools: [new Ports()] }));
+    });
 
-      paper.on("element:magnet:pointerclick", (elementView, evt, magnet) => {
-        paper.removeTools();
-        elementView.addTools(new dia.ToolsView({ tools: [new Ports()] }));
-      });
+    paper.on("blank:pointerdown cell:pointerdown", () => {
+      paper.removeTools();
+    });
 
-      paper.on("blank:pointerdown cell:pointerdown", () => {
-        paper.removeTools();
-      });
-
-      paper.on("element:mouseenter", (elementView) => {
-        elementView.addTools(
-          new dia.ToolsView({
-            tools: [
-              new joint.elementTools.Boundary({
-                padding: 10,
-                useModelGeometry: true,
-                attributes: {
-                  fill: "#4a7bcb",
-                  "fill-opacity": 0.1,
-                  stroke: "#4a7bcb",
-                  "stroke-width": 2,
-                  "stroke-dasharray": "none",
-                  "pointer-events": "none",
-                },
-              }),
-            ],
-            layer: dia.Paper.Layers.BACK,
-          })
-        );
-      });
-
-      paper.on("element:mouseleave", (elementView) => {
-        elementView.removeTools();
-      });
-
-      let currentLinkToolsView;
-
-      paper.on("link:pointerdown", (linkView) => {
-        ui.Halo.clear(paper);
-        if (linkView.hasTools()) return;
-
-        const toolsView = new joint.dia.ToolsView({
-          name: "link-hover",
+    paper.on("element:mouseenter", (elementView) => {
+      elementView.addTools(
+        new dia.ToolsView({
           tools: [
-            new joint.linkTools.Vertices({ vertexAdding: true }),
-            new joint.linkTools.SourceAnchor(),
-            new joint.linkTools.TargetAnchor(),
-            new joint.linkTools.Remove({
-              action: (evt) => {
-                console.log("Removing link:", linkView.model.id);
-                linkView.model.remove();
+            new joint.elementTools.Boundary({
+              padding: 10,
+              useModelGeometry: true,
+              attributes: {
+                fill: "#4a7bcb",
+                "fill-opacity": 0.1,
+                stroke: "#4a7bcb",
+                "stroke-width": 2,
+                "stroke-dasharray": "none",
+                "pointer-events": "none",
               },
             }),
           ],
-        });
+          layer: dia.Paper.Layers.BACK,
+        })
+      );
+    });
 
-        linkView.addTools(toolsView);
-        currentLinkToolsView = linkView;
+    paper.on("element:mouseleave", (elementView) => {
+      elementView.removeTools();
+    });
+
+    let currentLinkToolsView;
+
+    paper.on("link:pointerdown", (linkView) => {
+      ui.Halo.clear(paper);
+      if (linkView.hasTools()) return;
+
+      const toolsView = new joint.dia.ToolsView({
+        name: "link-hover",
+        tools: [
+          new joint.linkTools.Vertices({ vertexAdding: true }),
+          new joint.linkTools.SourceAnchor(),
+          new joint.linkTools.TargetAnchor(),
+          new joint.linkTools.Remove({
+            action: (evt) => {
+              console.log("Removing link:", linkView.model.id);
+              linkView.model.remove();
+            },
+          }),
+        ],
       });
 
-      paper.on("cell:pointerdown", (linkView) => {
-        if (currentLinkToolsView) {
-          currentLinkToolsView.removeTools();
-          currentLinkToolsView = null;
+      linkView.addTools(toolsView);
+      currentLinkToolsView = linkView;
+    });
+
+    paper.on("cell:pointerdown", (linkView) => {
+      if (currentLinkToolsView) {
+        currentLinkToolsView.removeTools();
+        currentLinkToolsView = null;
+      }
+    });
+
+    paper.on("blank:pointerdown", (linkView) => {
+      if (currentLinkToolsView) {
+        currentLinkToolsView.removeTools();
+        currentLinkToolsView = null;
+      }
+    });
+
+    paper.on("cell:pointerup", function (cellView) {
+      if (cellView.model instanceof joint.dia.Link) return;
+
+      const halo = new joint.ui.Halo({
+        cellView: cellView,
+        boxContent: false,
+      });
+      halo.removeHandle("clone");
+      halo.removeHandle("fork");
+      halo.removeHandle("resize");
+      halo.removeHandle("rotate");
+
+      halo.render();
+    });
+
+    const stencil = new ui.Stencil({
+      paper,
+      usePaperGrid: true,
+      width: 240,
+      height: "100%",
+      paperOptions: () => ({
+        model: new dia.Graph({}, { cellNamespace: shapes }),
+        cellViewNamespace: shapes,
+        background: { color: "#FCFCFC" },
+      }),
+      groups: {
+        elements: { label: "Elements" },
+        ports: { label: "Ports" },
+      },
+      layout: {
+        columns: 1,
+        rowHeight: "compact",
+        rowGap: 10,
+        columnWidth: 200,
+        marginY: 10,
+        resizeToFit: false,
+        dx: 0,
+        dy: 0,
+      },
+      dragStartClone: (cell) => {
+        const clone = cell.clone();
+        if (clone.get("port")) {
+          const { width, height } = clone.size();
+          clone.attr("body/fill", "lightgray");
+          clone.attr(
+            "body/transform",
+            `translate(-${width / 2}, -${height / 2})`
+          );
         }
-      });
-
-      paper.on("blank:pointerdown", (linkView) => {
-        if (currentLinkToolsView) {
-          currentLinkToolsView.removeTools();
-          currentLinkToolsView = null;
+        const cloneSize = cell.get("cloneSize");
+        if (cloneSize) {
+          clone.resize(cloneSize.width, cloneSize.height);
+        } else {
+          const { width, height } = cell.size();
+          clone.resize(width, height);
         }
-      });
+        return clone;
+      },
+    });
 
-      paper.on("cell:pointerup", function (cellView) {
-        if (cellView.model instanceof joint.dia.Link) return;
+    stencilRef.current = stencil;
+    stencilContainerRef.current.appendChild(stencil.el);
+    stencil.render();
 
-        const halo = new joint.ui.Halo({
-          cellView: cellView,
-          boxContent: false,
-        });
-        halo.removeHandle("clone");
-        halo.removeHandle("fork");
-        halo.removeHandle("resize");
-        halo.removeHandle("rotate");
+    const rect = new joint.shapes.standard.Rectangle({
+      position: { x: 100, y: 100 },
+      size: { width: 100, height: 50 },
+      attrs: {
+        body: { fill: "#ffffff", stroke: "#000000" },
+        label: { text: "Text", fill: "#000000" },
+      },
+      custom: {
+        description: "A sample rectangle",
+        color: "#ffffff",
+      },
+    });
 
-        halo.render();
-      });
-
-      const stencil = new ui.Stencil({
-        paper,
-        usePaperGrid: true,
-        width: 240,
-        height: "100%",
-        paperOptions: () => ({
-          model: new dia.Graph({}, { cellNamespace: shapes }),
-          cellViewNamespace: shapes,
-          background: { color: "#FCFCFC" },
-        }),
-        groups: {
-          elements: { label: "Elements" },
-          ports: { label: "Ports" },
+    const el = new shapes.standard.Rectangle({
+      position: { x: 40, y: 40 },
+      size: { width: 120, height: 60 },
+      furnitureType: "",
+      attrs: {
+        body: {
+          stroke: "#ed2637",
+          fill: "#ed2637",
+          fillOpacity: 0.2,
         },
-        layout: {
-          columns: 1,
-          rowHeight: "compact",
-          rowGap: 10,
-          columnWidth: 200,
-          marginY: 10,
-          resizeToFit: false,
-          dx: 0,
-          dy: 0,
+        label: {
+          text: "Select furniture",
+          fontFamily: "sans-serif",
         },
-        dragStartClone: (cell) => {
-          const clone = cell.clone();
-          if (clone.get("port")) {
-            const { width, height } = clone.size();
-            clone.attr("body/fill", "lightgray");
-            clone.attr(
-              "body/transform",
-              `translate(-${width / 2}, -${height / 2})`
-            );
-          }
-          const cloneSize = cell.get("cloneSize");
-          if (cloneSize) {
-            clone.resize(cloneSize.width, cloneSize.height);
-          } else {
-            const { width, height } = cell.size();
-            clone.resize(width, height);
-          }
-          return clone;
+      },
+    });
+
+    const stencilElements = [
+      {
+        type: "custom.TemplateImage",
+        svg: MotorPumpSVG,
+        size: { width: 80, height: 60 },
+        cloneSize: { width: 200, height: 200 },
+        attrs: {
+          image: {
+            "data-animated": false,
+            class: "",
+          },
         },
-      });
-
-      stencilRef.current = stencil;
-      stencilContainerRef.current.appendChild(stencil.el);
-      stencil.render();
-
-      const rect = new joint.shapes.standard.Rectangle({
-        position: { x: 100, y: 100 },
-        size: { width: 100, height: 50 },
+        contextMenu: [
+          {
+            content: "Pulse Animation",
+            action: (cellView) => cellView.model.pulse(),
+          },
+          {
+            content: "Rotate Animation",
+            action: (cellView) => cellView.model.rotate(),
+          },
+          "-",
+          {
+            content: "Stop Animation",
+            action: (cellView) => cellView.model.stopAnimation(),
+          },
+        ],
+      },
+      {
+        type: "standard.Rectangle",
+        size: { width: 100, height: 60 },
+        cloneSize: { width: 150, height: 80 },
+        attrs: {
+          body: {
+            fill: "#ffffff",
+            stroke: "transparent",
+          },
+          label: {
+            text: "Text",
+            fill: "#000000",
+          },
+        },
+        custom: {
+          description: "A sample rectangle",
+          color: "#ffffff",
+        },
+      },
+      {
+        type: "standard.Rectangle",
+        size: { width: 100, height: 60 },
+        cloneSize: { width: 150, height: 80 },
         attrs: {
           body: { fill: "#ffffff", stroke: "#000000" },
           label: { text: "Text", fill: "#000000" },
@@ -867,161 +1058,83 @@ useEffect(() => {
           description: "A sample rectangle",
           color: "#ffffff",
         },
-      });
+      },
+      {
+        type: "standard.Rectangle",
+        size: { width: 100, height: 60 },
+        cloneSize: { width: 80, height: 60 },
+        attrs: {
+          body: { fill: "#ffffff", stroke: "#000000" },
+          label: { text: "Enter text", fill: "#000000" },
+        },
+        custom: {
+          description: "A sample rectangle",
+          color: "#ffffff",
+        },
+      },
+      {
+        type: "custom.TemplateImage",
+        svg: MotorPumpSVG,
+        size: { width: 80, height: 60 },
+        cloneSize: { width: 200, height: 200 },
+        attrs: {},
+      },
+      {
+        type: "custom.TemplateImage",
+        svg: HeatPumpSVG,
+        size: { width: 80, height: 60 },
+        cloneSize: { width: 200, height: 200 },
+        attrs: {},
+      },
+      {
+        type: "custom.TemplateImage",
+        svg: CoolingPlate,
+        size: { width: 80, height: 60 },
+        cloneSize: { width: 200, height: 250 },
+        attrs: {},
+      },
+      {
+        type: "custom.TemplateImage",
+        svg: VatAgitator,
+        size: { width: 80, height: 60 },
+        cloneSize: { width: 200, height: 250 },
+        attrs: {},
+      },
+      {
+        type: "custom.TemplateImage",
+        svg: Chille,
+        size: { width: 80, height: 60 },
+        cloneSize: { width: 250, height: 200 },
+        attrs: {},
+      },
+      {
+        type: "custom.TemplateImage",
+        svg: IceBank,
+        size: { width: 80, height: 60 },
+        cloneSize: { width: 250, height: 200 },
+        attrs: {},
+      },
+      {
+        type: "custom.TemplateImage",
+        svg: ACFan,
+        size: { width: 80, height: 60 },
+        cloneSize: { width: 250, height: 200 },
+        attrs: {},
+      },
+    ];
 
-      const el = new shapes.standard.Rectangle({
-        position: { x: 40, y: 40 },
-        size: { width: 120, height: 60 },
-        furnitureType: "",
+    const stencilPorts = [
+      {
+        type: "standard.Rectangle",
+        size: { width: 10, height: 10 },
         attrs: {
           body: {
-            stroke: "#ed2637",
-            fill: "#ed2637",
-            fillOpacity: 0.2,
-          },
-          label: {
-            text: "Select furniture",
-            fontFamily: "sans-serif",
+            fill: "transparent",
+            stroke: "transparent",
           },
         },
-      });
-
-      const stencilElements = [
-            {
-      type: "custom.TemplateImage",
-      svg: MotorPumpSVG,
-      size: { width: 80, height: 60 },
-      cloneSize: { width: 200, height: 200 },
-      attrs: {
-        image: {
-          'data-animated': false,
-          'class': ''
-        }
-      },
-      contextMenu: [
-        {
-          content: 'Pulse Animation',
-          action: (cellView) => cellView.model.pulse()
-        },
-        {
-          content: 'Rotate Animation',
-          action: (cellView) => cellView.model.rotate()
-        },
-        '-',
-        {
-          content: 'Stop Animation',
-          action: (cellView) => cellView.model.stopAnimation()
-        }
-      ]
-    },
-        {
-          type: "standard.Rectangle",
-          size: { width: 100, height: 60 },
-          cloneSize: { width: 150, height: 80 },
-          attrs: {
-            body: {
-              fill: "#ffffff",
-              stroke: "transparent",
-            },
-            label: {
-              text: "Text",
-              fill: "#000000",
-            },
-          },
-          custom: {
-            description: "A sample rectangle",
-            color: "#ffffff",
-          },
-        },
-        {
-          type: "standard.Rectangle",
-          size: { width: 100, height: 60 },
-          cloneSize: { width: 150, height: 80 },
-          attrs: {
-            body: { fill: "#ffffff", stroke: "#000000" },
-            label: { text: "Text", fill: "#000000" },
-          },
-          custom: {
-            description: "A sample rectangle",
-            color: "#ffffff",
-          },
-        },
-        {
-          type: "standard.Rectangle",
-          size: { width: 100, height: 60 },
-          cloneSize: { width: 80, height: 60 },
-          attrs: {
-            body: { fill: "#ffffff", stroke: "#000000" },
-            label: { text: "Enter text", fill: "#000000" },
-          },
-          custom: {
-            description: "A sample rectangle",
-            color: "#ffffff",
-          },
-        },
-        {
-          type: "custom.TemplateImage",
-          svg: MotorPumpSVG,
-          size: { width: 80, height: 60 },
-          cloneSize: { width: 200, height: 200 },
-          attrs: {},
-        },
-        {
-          type: "custom.TemplateImage",
-          svg: HeatPumpSVG,
-          size: { width: 80, height: 60 },
-          cloneSize: { width: 200, height: 200 },
-          attrs: {},
-        },
-        {
-          type: "custom.TemplateImage",
-          svg: CoolingPlate,
-          size: { width: 80, height: 60 },
-          cloneSize: { width: 200, height: 250 },
-          attrs: {},
-        },
-        {
-          type: "custom.TemplateImage",
-          svg: VatAgitator,
-          size: { width: 80, height: 60 },
-          cloneSize: { width: 200, height: 250 },
-          attrs: {},
-        },
-        {
-          type: "custom.TemplateImage",
-          svg: Chille,
-          size: { width: 80, height: 60 },
-          cloneSize: { width: 250, height: 200 },
-          attrs: {},
-        },
-        {
-          type: "custom.TemplateImage",
-          svg: IceBank,
-          size: { width: 80, height: 60 },
-          cloneSize: { width: 250, height: 200 },
-          attrs: {},
-        },
-             {
-          type: "custom.TemplateImage",
-          svg: ACFan,
-          size: { width: 80, height: 60 },
-          cloneSize: { width: 250, height: 200 },
-          attrs: {},
-        },
-      ];
-
-      const stencilPorts = [
-        {
-          type: "standard.Rectangle",
-          size: { width: 10, height: 10 },
-          attrs: {
-            body: {
-              fill: "transparent",
-              stroke: "transparent",
-            },
-          },
-          port: {
-            markup: joint.util.svg/*xml*/ `
+        port: {
+          markup: joint.util.svg/*xml*/ `
       <g @selector="portBody" magnet="active">
         <rect 
           x="0" y="2.5" 
@@ -1050,19 +1163,65 @@ useEffect(() => {
         </defs>
       </g>
      `,
-          },
         },
-        {
-          type: "standard.Path",
-          size: { width: 30, height: 25 },
-          markup: util.svg`
+      },
+      {
+        type: "standard.Path",
+        size: { width: 30, height: 25 },
+        markup: util.svg`
       <rect @selector="pipeBody" />
       <rect @selector="pipeEnd" />
      `,
+        attrs: {
+          portRoot: {
+            magnetSelector: "pipeEnd",
+            magnet: "active",
+          },
+          pipeBody: {
+            width: "calc(w)",
+            height: "calc(h)",
+            y: "calc(h / -2)",
+            fill: {
+              type: "linearGradient",
+              stops: [
+                { offset: "0%", color: "gray" },
+                { offset: "30%", color: "white" },
+                { offset: "70%", color: "white" },
+                { offset: "100%", color: "gray" },
+              ],
+              attrs: {
+                x1: "0%",
+                y1: "0%",
+                x2: "0%",
+                y2: "100%",
+              },
+            },
+            strokeWidth: 2,
+            filter: {
+              name: "dropShadow",
+              args: { dx: 1, dy: 1, blur: 2, color: "rgba(0,0,0,0.3)" },
+            },
+            style: {
+              filter: "drop-shadow(2px 2px 4px rgba(0,0,0,0.4))",
+            },
+          },
+          pipeEnd: {
+            width: 5,
+            height: "calc(h+6)",
+            y: "calc(h / -2 - 3)",
+            x: "calc(w-4)",
+            stroke: "gray",
+            strokeWidth: 3,
+            fill: "white",
+          },
+        },
+        port: {
+          group: "out",
+          size: { width: 30, height: 25 },
           attrs: {
             portRoot: {
-              magnetSelector: "pipeEnd",
               magnet: "active",
+              "port-group": "out",
             },
             pipeBody: {
               width: "calc(w)",
@@ -1082,14 +1241,6 @@ useEffect(() => {
                   x2: "0%",
                   y2: "100%",
                 },
-              },
-              strokeWidth: 2,
-              filter: {
-                name: "dropShadow",
-                args: { dx: 1, dy: 1, blur: 2, color: "rgba(0,0,0,0.3)" },
-              },
-              style: {
-                filter: "drop-shadow(2px 2px 4px rgba(0,0,0,0.4))",
               },
             },
             pipeEnd: {
@@ -1100,73 +1251,84 @@ useEffect(() => {
               stroke: "gray",
               strokeWidth: 3,
               fill: "white",
+              magnet: "active",
+              "port-group": "out",
+            },
+            portLabel: {
+              fontFamily: "Roboto, sans-serif",
+              fontSize: 12,
+              fill: "#333333",
+              pointerEvents: "none",
+              x: "calc(w + 12)",
+              y: "calc(h / 2)",
+              textAnchor: "middle",
             },
           },
-          port: {
-            group: "out",
-            size: { width: 30, height: 25 },
-            attrs: {
-              portRoot: {
-                magnet: "active",
-                "port-group": "out",
-              },
-              pipeBody: {
-                width: "calc(w)",
-                height: "calc(h)",
-                y: "calc(h / -2)",
-                fill: {
-                  type: "linearGradient",
-                  stops: [
-                    { offset: "0%", color: "gray" },
-                    { offset: "30%", color: "white" },
-                    { offset: "70%", color: "white" },
-                    { offset: "100%", color: "gray" },
-                  ],
-                  attrs: {
-                    x1: "0%",
-                    y1: "0%",
-                    x2: "0%",
-                    y2: "100%",
-                  },
-                },
-              },
-              pipeEnd: {
-                width: 5,
-                height: "calc(h+6)",
-                y: "calc(h / -2 - 3)",
-                x: "calc(w-4)",
-                stroke: "gray",
-                strokeWidth: 3,
-                fill: "white",
-                magnet: "active",
-                "port-group": "out",
-              },
-              portLabel: {
-                fontFamily: "Roboto, sans-serif",
-                fontSize: 12,
-                fill: "#333333",
-                pointerEvents: "none",
-                x: "calc(w + 12)",
-                y: "calc(h / 2)",
-                textAnchor: "middle",
-              },
-            },
-            markup: util.svg`
+          markup: util.svg`
       <rect @selector="pipeBody" magnet="active" port-group="out"/>
       <rect @selector="pipeEnd" x="-12"/>
       `,
-          },
         },
-        {
-          type: "standard.Path",
-          size: { width: 30, height: 25 },
-          markup: util.svg`
+      },
+      {
+        type: "standard.Path",
+        size: { width: 30, height: 25 },
+        markup: util.svg`
       <rect @selector="pipeBody" />
       <rect @selector="pipeEnd" />
       `,
+        attrs: {
+          portRoot: {
+            magnetSelector: "pipeEnd",
+          },
+          pipeBody: {
+            width: "calc(w)",
+            height: "calc(h)",
+            y: "calc(h / -2)",
+            fill: {
+              type: "linearGradient",
+              stops: [
+                { offset: "0%", color: "gray" },
+                { offset: "30%", color: "white" },
+                { offset: "70%", color: "white" },
+                { offset: "100%", color: "gray" },
+              ],
+              attrs: {
+                x1: "0%",
+                y1: "0%",
+                x2: "0%",
+                y2: "100%",
+              },
+            },
+
+            filter: {
+              name: "dropShadow",
+              args: { dx: 1, dy: 1, blur: 2, color: "rgba(0,0,0,0.3)" },
+            },
+            event: "pointerover",
+            style: {
+              filter: "drop-shadow(2px 2px 4px rgba(0,0,0,0.4))",
+            },
+          },
+          pipeEnd: {
+            width: 5,
+            height: "calc(h+6)",
+            x: "calc(w / -5)",
+            y: "calc(h / -2 - 3)",
+            stroke: "gray",
+            strokeWidth: 3,
+            fill: "white",
+            magnet: "passive",
+            "port-group": "in",
+          },
+        },
+        port: {
+          group: "in",
+          size: { width: 30, height: 25 },
           attrs: {
             portRoot: {
               magnetSelector: "pipeEnd",
+              "port-group": "in",
             },
             pipeBody: {
               width: "calc(w)",
@@ -1187,15 +1349,6 @@ useEffect(() => {
                   y2: "100%",
                 },
               },
-
-              filter: {
-                name: "dropShadow",
-                args: { dx: 1, dy: 1, blur: 2, color: "rgba(0,0,0,0.3)" },
-              },
-              event: "pointerover",
-              style: {
-                filter: "drop-shadow(2px 2px 4px rgba(0,0,0,0.4))",
-              },
             },
             pipeEnd: {
               width: 5,
@@ -1205,78 +1358,86 @@ useEffect(() => {
               stroke: "gray",
               strokeWidth: 3,
               fill: "white",
-              magnet: "passive",
-              "port-group": "in",
-            },
-          },
-          port: {
-            group: "in",
-            size: { width: 30, height: 25 },
-            attrs: {
-              portRoot: {
-                magnetSelector: "pipeEnd",
-                "port-group": "in",
-              },
-              pipeBody: {
-                width: "calc(w)",
-                height: "calc(h)",
-                y: "calc(h / -2)",
-                fill: {
-                  type: "linearGradient",
-                  stops: [
-                    { offset: "0%", color: "gray" },
-                    { offset: "30%", color: "white" },
-                    { offset: "70%", color: "white" },
-                    { offset: "100%", color: "gray" },
-                  ],
-                  attrs: {
-                    x1: "0%",
-                    y1: "0%",
-                    x2: "0%",
-                    y2: "100%",
-                  },
-                },
-              },
-              pipeEnd: {
-                width: 5,
-                height: "calc(h+6)",
-                x: "calc(w / -5)",
-                y: "calc(h / -2 - 3)",
-                stroke: "gray",
-                strokeWidth: 3,
-                fill: "white",
-              },
-              portLabel: {
-                fontFamily: "Roboto, sans-serif",
-                fontSize: 12,
-                fill: "#333333",
-                pointerEvents: "none",
-                x: "calc(w / 2)",
-                y: "calc(h / 2 + 12)",
-                textAnchor: "middle",
-              },
             },
             portLabel: {
               fontFamily: "Roboto, sans-serif",
+              fontSize: 12,
+              fill: "#333333",
               pointerEvents: "none",
+              x: "calc(w / 2)",
+              y: "calc(h / 2 + 12)",
+              textAnchor: "middle",
             },
-            markup: util.svg`
+          },
+          portLabel: {
+            fontFamily: "Roboto, sans-serif",
+            pointerEvents: "none",
+          },
+          markup: util.svg`
           <rect @selector="pipeBody"  magnet="passive" port-group="in" />
           <rect @selector="pipeEnd" />
         `,
-          },
         },
-        {
-          type: "standard.Path",
-          size: { width: 30, height: 25 },
-          markup: util.svg`
+      },
+      {
+        type: "standard.Path",
+        size: { width: 30, height: 25 },
+        markup: util.svg`
       <rect @selector="pipeBody" />
       <rect @selector="pipeEnd" />
      `,
+        attrs: {
+          portRoot: {
+            magnetSelector: "pipeEnd",
+            magnet: "active",
+          },
+          pipeBody: {
+            width: "calc(h)",
+            height: "calc(w)",
+            x: "calc(w / -2)",
+            fill: {
+              type: "linearGradient",
+              stops: [
+                { offset: "0%", color: "gray" },
+                { offset: "30%", color: "white" },
+                { offset: "70%", color: "white" },
+                { offset: "100%", color: "gray" },
+              ],
+              attrs: {
+                x1: "0%",
+                y1: "0%",
+                x2: "100%",
+                y2: "0%",
+              },
+            },
+            strokeWidth: 2,
+            filter: {
+              name: "dropShadow",
+              args: { dx: 1, dy: 1, blur: 2, color: "rgba(0,0,0,0.3)" },
+            },
+            event: "pointerover",
+            style: {
+              filter: "drop-shadow(2px 2px 4px rgba(0,0,0,0.4))",
+            },
+          },
+          pipeEnd: {
+            width: "calc(h+6)",
+            height: 5,
+            x: "calc(w / -2 - 3)",
+            y: "calc(h-4)",
+            stroke: "gray",
+            strokeWidth: 3,
+            fill: "white",
+          },
+        },
+        port: {
+          group: "out",
+          size: { width: 30, height: 25 },
           attrs: {
             portRoot: {
               magnetSelector: "pipeEnd",
               magnet: "active",
+              "port-group": "out",
             },
             pipeBody: {
               width: "calc(h)",
@@ -1296,15 +1457,6 @@ useEffect(() => {
                   x2: "100%",
                   y2: "0%",
                 },
-              },
-              strokeWidth: 2,
-              filter: {
-                name: "dropShadow",
-                args: { dx: 1, dy: 1, blur: 2, color: "rgba(0,0,0,0.3)" },
-              },
-              event: "pointerover",
-              style: {
-                filter: "drop-shadow(2px 2px 4px rgba(0,0,0,0.4))",
               },
             },
             pipeEnd: {
@@ -1315,78 +1467,87 @@ useEffect(() => {
               stroke: "gray",
               strokeWidth: 3,
               fill: "white",
-            },
-          },
-          port: {
-            group: "out",
-            size: { width: 30, height: 25 },
-            attrs: {
-              portRoot: {
-                magnetSelector: "pipeEnd",
-                magnet: "active",
-                "port-group": "out",
-              },
-              pipeBody: {
-                width: "calc(h)",
-                height: "calc(w)",
-                x: "calc(w / -2)",
-                fill: {
-                  type: "linearGradient",
-                  stops: [
-                    { offset: "0%", color: "gray" },
-                    { offset: "30%", color: "white" },
-                    { offset: "70%", color: "white" },
-                    { offset: "100%", color: "gray" },
-                  ],
-                  attrs: {
-                    x1: "0%",
-                    y1: "0%",
-                    x2: "100%",
-                    y2: "0%",
-                  },
-                },
-              },
-              pipeEnd: {
-                width: "calc(h+6)",
-                height: 5,
-                x: "calc(w / -2 - 3)",
-                y: "calc(h-4)",
-                stroke: "gray",
-                strokeWidth: 3,
-                fill: "white",
-                magnet: "active",
-                "port-group": "out",
-              },
-              portLabel: {
-                fontFamily: "Roboto, sans-serif",
-                fontSize: 12,
-                fill: "#333333",
-                pointerEvents: "none",
-                x: "calc(w / 2 + 12)",
-                y: "calc(h / 2)",
-                textAnchor: "middle",
-              },
+              magnet: "active",
+              "port-group": "out",
             },
             portLabel: {
               fontFamily: "Roboto, sans-serif",
+              fontSize: 12,
+              fill: "#333333",
               pointerEvents: "none",
+              x: "calc(w / 2 + 12)",
+              y: "calc(h / 2)",
+              textAnchor: "middle",
             },
-            markup: util.svg`
+          },
+          portLabel: {
+            fontFamily: "Roboto, sans-serif",
+            pointerEvents: "none",
+          },
+          markup: util.svg`
         <rect @selector="pipeBody"  magnet="active" port-group="out" />
         <rect @selector="pipeEnd" />
       `,
-          },
         },
-        {
-          type: "standard.Path",
-          size: { width: 30, height: 25 },
-          markup: util.svg`
+      },
+      {
+        type: "standard.Path",
+        size: { width: 30, height: 25 },
+        markup: util.svg`
       <rect @selector="pipeBody" />
       <rect @selector="pipeEnd" />
      `,
+        attrs: {
+          portRoot: {
+            magnetSelector: "pipeEnd",
+          },
+          pipeBody: {
+            width: "calc(h)",
+            height: "calc(w)",
+            x: "calc(w / -2)",
+            fill: {
+              type: "linearGradient",
+              stops: [
+                { offset: "0%", color: "gray" },
+                { offset: "30%", color: "white" },
+                { offset: "70%", color: "white" },
+                { offset: "100%", color: "gray" },
+              ],
+              attrs: {
+                x1: "0%",
+                y1: "0%",
+                x2: "100%",
+                y2: "0%",
+              },
+            },
+            filter: {
+              name: "dropShadow",
+              args: { dx: 1, dy: 1, blur: 2, color: "rgba(0,0,0,0.3)" },
+            },
+            event: "pointerover",
+            style: {
+              filter: "drop-shadow(2px 2px 4px rgba(0,0,0,0.4))",
+            },
+          },
+          pipeEnd: {
+            width: "calc(h+6)",
+            height: 5,
+            x: "calc(w / -2 - 3)",
+            y: -1,
+            stroke: "gray",
+            strokeWidth: 3,
+            fill: "white",
+            magnet: "passive",
+            "port-group": "in",
+          },
+        },
+        port: {
+          group: "in",
+          size: { width: 30, height: 25 },
           attrs: {
             portRoot: {
               magnetSelector: "pipeEnd",
+              "port-group": "in",
             },
             pipeBody: {
               width: "calc(h)",
@@ -1406,14 +1567,6 @@ useEffect(() => {
                   x2: "100%",
                   y2: "0%",
                 },
-              },
-              filter: {
-                name: "dropShadow",
-                args: { dx: 1, dy: 1, blur: 2, color: "rgba(0,0,0,0.3)" },
-              },
-              event: "pointerover",
-              style: {
-                filter: "drop-shadow(2px 2px 4px rgba(0,0,0,0.4))",
               },
             },
             pipeEnd: {
@@ -1427,19 +1580,163 @@ useEffect(() => {
               magnet: "passive",
               "port-group": "in",
             },
+            portLabel: {
+              fontFamily: "Roboto, sans-serif",
+              fontSize: 12,
+              fill: "#333333",
+              pointerEvents: "none",
+              x: "calc(w / 2 + 12)",
+              y: "calc(h / 2)",
+              textAnchor: "middle",
+            },
           },
-          port: {
-            group: "in",
-            size: { width: 30, height: 25 },
+          portLabel: {
+            fontFamily: "Roboto, sans-serif",
+            pointerEvents: "none",
+          },
+          markup: util.svg`
+        <rect @selector="pipeBody"  magnet="passive" port-group="in" />
+        <rect @selector="pipeEnd" />
+      `,
+        },
+      },
+    ];
+
+    stencilElements.forEach((element) => {
+      element.ports = {
+        groups: {
+          in: {
+            position: { name: "left" },
+            attrs: { portBody: { magnet: true } },
+            args: { dx: 0, dy: 0 },
+          },
+          out: {
+            position: { name: "right" },
+            attrs: { portBody: { magnet: true } },
+            args: { dx: 0, dy: 0 },
+          },
+        },
+        items: [],
+      };
+    });
+
+    stencil.load({ elements: stencilElements, ports: stencilPorts });
+
+    stencil.on({
+      "element:dragstart": (cloneView, evt) => {
+        const clone = cloneView.model;
+        evt.data.isPort = clone.get("port");
+        console.log("Drag start, port:", evt.data.isPort);
+        paper.removeTools();
+      },
+      "element:dragstart element:drag": (cloneView, evt, cloneArea) => {
+        if (!evt.data.isPort) return;
+        const [dropTarget] = graph.findModelsFromPoint(cloneArea.topLeft());
+        console.log("Drop target:", dropTarget);
+        if (dropTarget) {
+          evt.data.dropTarget = dropTarget;
+          highlighters.mask.add(
+            dropTarget.findView(paper),
+            "body",
+            "valid-drop-target",
+            {
+              layer: joint.dia.Paper.Layers.FRONT,
+              attrs: {
+                stroke: "#9580ff",
+                "stroke-width": 2,
+                "stroke-opacity": 1,
+              },
+            }
+          );
+          highlighters.addClass.removeAll(
+            cloneView.paper,
+            "invalid-drop-target"
+          );
+        } else {
+          evt.data.dropTarget = null;
+          highlighters.addClass.add(cloneView, "body", "invalid-drop-target", {
+            className: "invalid-drop-target",
+          });
+          highlighters.mask.removeAll(paper, "valid-drop-target");
+        }
+      },
+      "element:dragend": (cloneView, evt, cloneArea) => {
+        if (!evt.data.isPort) return;
+        const clone = cloneView.model;
+        const { dropTarget } = evt.data;
+        if (dropTarget) {
+          stencil.cancelDrag();
+          addElementPort(
+            dropTarget,
+            clone.get("port"),
+            cloneArea.topLeft().difference(dropTarget.position()).toJSON()
+          );
+        } else {
+          stencil.cancelDrag({ dropAnimation: true });
+        }
+        highlighters.mask.removeAll(paper, "valid-drop-target");
+      },
+    });
+
+    const templateImage = new TemplateImage({
+      svg: MotorPumpSVG,
+      position: { x: 100, y: 100 },
+      size: { width: 200, height: 200 },
+      attrs: {},
+      portMarkup: [
+        {
+          tagName: "path",
+          selector: "portBody",
+          attributes: {
+            fill: "#FFFFFF",
+            stroke: "#333333",
+            "stroke-width": 2,
+          },
+        },
+      ],
+
+      ports: {
+        groups: {
+          in: {
+            position: {
+              name: "line",
+              args: {
+                start: { x: "calc(w)", y: "calc(h/2 + 80)" },
+                end: { x: "calc(w)", y: 40 },
+              },
+            },
+            markup: util.svg`
+                            <rect @selector="pipeBody"   x="-12"
+                    y="-12"
+                    width="24"
+                    height="24"
+                    fill="#ff9580"
+                    stroke="#333333"
+                    stroke-width="2"
+                    magnet="active"/>
+                            <rect @selector="pipeEnd" />
+                        `,
+            size: { width: 30, height: 30 },
+            z: -1,
             attrs: {
               portRoot: {
-                magnetSelector: "pipeEnd",
-                "port-group": "in",
+                magnet: "active",
+              },
+              portLabelBackground: {
+                ref: "portLabel",
+                fill: "#FFFFFF",
+                fillOpacity: 0.7,
+                x: "calc(x - 2)",
+                y: "calc(y - 2)",
+                width: "calc(w + 4)",
+                height: "calc(h + 4)",
+                pointerEvents: "none",
               },
               pipeBody: {
-                width: "calc(h)",
-                height: "calc(w)",
-                x: "calc(w / -2)",
+                width: "calc(w)",
+                height: "calc(h)",
+                y: "calc(h / -2)",
+                x: "calc(-1 * w)",
                 fill: {
                   type: "linearGradient",
                   stops: [
@@ -1451,641 +1748,447 @@ useEffect(() => {
                   attrs: {
                     x1: "0%",
                     y1: "0%",
-                    x2: "100%",
-                    y2: "0%",
+                    x2: "0%",
+                    y2: "100%",
                   },
                 },
               },
               pipeEnd: {
-                width: "calc(h+6)",
-                height: 5,
-                x: "calc(w / -2 - 3)",
-                y: -1,
+                width: 10,
+                height: "calc(h+6)",
+                y: "calc(h / -2 - 3)",
+                x: "calc(w -40)",
                 stroke: "gray",
                 strokeWidth: 3,
                 fill: "white",
-                magnet: "passive",
-                "port-group": "in",
               },
-              portLabel: {
-                fontFamily: "Roboto, sans-serif",
-                fontSize: 12,
-                fill: "#333333",
-                pointerEvents: "none",
-                x: "calc(w / 2 + 12)",
-                y: "calc(h / 2)",
-                textAnchor: "middle",
+              portLabel: { fontFamily: "sans-serif", pointerEvents: "none" },
+              portBody: {
+                d: "M 0 -calc(0.5 * h) h calc(w) l 3 calc(0.5 * h) l -3 calc(0.5 * h) H 0 A calc(0.5 * h) calc(0.5 * h) 1 1 1 0 -calc(0.5 * h) Z",
+                magnet: "active",
               },
             },
-            portLabel: {
-              fontFamily: "Roboto, sans-serif",
-              pointerEvents: "none",
+          },
+          out: {
+            position: {
+              name: "line",
+              args: {
+                start: { x: "calc(w)", y: "calc(h/2)" },
+                end: { x: "calc(w)", y: 40 },
+              },
             },
+            size: { width: 30, height: 30 },
             markup: util.svg`
-        <rect @selector="pipeBody"  magnet="passive" port-group="in" />
-        <rect @selector="pipeEnd" />
-      `,
-          },
-        },
-      ];
-
-      stencilElements.forEach((element) => {
-        element.ports = {
-          groups: {
-            in: {
-              position: { name: "left" },
-              attrs: { portBody: { magnet: true } },
-              args: { dx: 0, dy: 0 },
-            },
-            out: {
-              position: { name: "right" },
-              attrs: { portBody: { magnet: true } },
-              args: { dx: 0, dy: 0 },
-            },
-          },
-          items: [
-          ],
-        };
-      });
-
-      stencil.load({ elements: stencilElements, ports: stencilPorts });
-
-      stencil.on({
-        "element:dragstart": (cloneView, evt) => {
-          const clone = cloneView.model;
-          evt.data.isPort = clone.get("port");
-          console.log("Drag start, port:", evt.data.isPort);
-          paper.removeTools();
-        },
-        "element:dragstart element:drag": (cloneView, evt, cloneArea) => {
-          if (!evt.data.isPort) return;
-          const [dropTarget] = graph.findModelsFromPoint(cloneArea.topLeft());
-          console.log("Drop target:", dropTarget);
-          if (dropTarget) {
-            evt.data.dropTarget = dropTarget;
-            highlighters.mask.add(
-              dropTarget.findView(paper),
-              "body",
-              "valid-drop-target",
-              {
-                layer: joint.dia.Paper.Layers.FRONT,
-                attrs: {
-                  stroke: "#9580ff",
-                  "stroke-width": 2,
-                  "stroke-opacity": 1,
-                },
-              }
-            );
-            highlighters.addClass.removeAll(
-              cloneView.paper,
-              "invalid-drop-target"
-            );
-          } else {
-            evt.data.dropTarget = null;
-            highlighters.addClass.add(
-              cloneView,
-              "body",
-              "invalid-drop-target",
-              {
-                className: "invalid-drop-target",
-              }
-            );
-            highlighters.mask.removeAll(paper, "valid-drop-target");
-          }
-        },
-        "element:dragend": (cloneView, evt, cloneArea) => {
-          if (!evt.data.isPort) return;
-          const clone = cloneView.model;
-          const { dropTarget } = evt.data;
-          if (dropTarget) {
-            stencil.cancelDrag();
-            addElementPort(
-              dropTarget,
-              clone.get("port"),
-              cloneArea.topLeft().difference(dropTarget.position()).toJSON()
-            );
-          } else {
-            stencil.cancelDrag({ dropAnimation: true });
-          }
-          highlighters.mask.removeAll(paper, "valid-drop-target");
-        },
-      });
-
-      const templateImage = new TemplateImage({
-        svg: MotorPumpSVG,
-        position: { x: 100, y: 100 },
-        size: { width: 200, height: 200 },
-        attrs: {},
-        portMarkup: [
-          {
-            tagName: "path",
-            selector: "portBody",
-            attributes: {
-              fill: "#FFFFFF",
-              stroke: "#333333",
-              "stroke-width": 2,
-            },
-          },
-        ],
-
-        ports: {
-          groups: {
-            in: {
-              position: {
-                name: "line",
-                args: {
-                  start: { x: "calc(w)", y: "calc(h/2 + 80)" },
-                  end: { x: "calc(w)", y: 40 },
-                },
-              },
-              markup: util.svg`
-                            <rect @selector="pipeBody"   x="-12"
-                    y="-12"
-                    width="24"
-                    height="24"
-                    fill="#ff9580"
-                    stroke="#333333"
-                    stroke-width="2"
-                    magnet="active"/>
-                            <rect @selector="pipeEnd" />
-                        `,
-              size: { width: 30, height: 30 },
-              z: -1,
-              attrs: {
-                portRoot: {
-                  magnet: "active",
-                },
-                portLabelBackground: {
-                  ref: "portLabel",
-                  fill: "#FFFFFF",
-                  fillOpacity: 0.7,
-                  x: "calc(x - 2)",
-                  y: "calc(y - 2)",
-                  width: "calc(w + 4)",
-                  height: "calc(h + 4)",
-                  pointerEvents: "none",
-                },
-                pipeBody: {
-                  width: "calc(w)",
-                  height: "calc(h)",
-                  y: "calc(h / -2)",
-                  x: "calc(-1 * w)",
-                  fill: {
-                    type: "linearGradient",
-                    stops: [
-                      { offset: "0%", color: "gray" },
-                      { offset: "30%", color: "white" },
-                      { offset: "70%", color: "white" },
-                      { offset: "100%", color: "gray" },
-                    ],
-                    attrs: {
-                      x1: "0%",
-                      y1: "0%",
-                      x2: "0%",
-                      y2: "100%",
-                    },
-                  },
-                },
-                pipeEnd: {
-                  width: 10,
-                  height: "calc(h+6)",
-                  y: "calc(h / -2 - 3)",
-                  x: "calc(w -40)",
-                  stroke: "gray",
-                  strokeWidth: 3,
-                  fill: "white",
-                },
-                portLabel: { fontFamily: "sans-serif", pointerEvents: "none" },
-                portBody: {
-                  d: "M 0 -calc(0.5 * h) h calc(w) l 3 calc(0.5 * h) l -3 calc(0.5 * h) H 0 A calc(0.5 * h) calc(0.5 * h) 1 1 1 0 -calc(0.5 * h) Z",
-                  magnet: "active",
-                },
-              },
-            },
-            out: {
-              position: {
-                name: "line",
-                args: {
-                  start: { x: "calc(w)", y: "calc(h/2)" },
-                  end: { x: "calc(w)", y: 40 },
-                },
-              },
-              size: { width: 30, height: 30 },
-              markup: util.svg`
                              <g @selector="portBodyGroup" transform="rotate(180)">
       <rect @selector="pipeBody" />
       <rect @selector="pipeEnd" />
       </g>
                         `,
-              z: 1,
-              attrs: {
-                portRoot: {
-                  magnet: "active",
-                },
-                portLabelBackground: {
-                  ref: "portLabel",
-                  fill: "#FFFFFF",
-                  fillOpacity: 0.8,
-                  x: "calc(x - 2)",
-                  y: "calc(y - 2)",
-                  width: "calc(w + 4)",
-                  height: "calc(h + 4)",
-                  pointerEvents: "none",
-                },
-                pipeBody: {
-                  width: "calc(w)",
-                  height: "calc(h)",
-                  y: "calc(h / -2)",
-                  fill: {
-                    type: "linearGradient",
-                    stops: [
-                      { offset: "0%", color: "gray" },
-                      { offset: "30%", color: "white" },
-                      { offset: "70%", color: "white" },
-                      { offset: "100%", color: "gray" },
-                    ],
-                    attrs: {
-                      x1: "0%",
-                      y1: "0%",
-                      x2: "0%",
-                      y2: "100%",
-                    },
+            z: 1,
+            attrs: {
+              portRoot: {
+                magnet: "active",
+              },
+              portLabelBackground: {
+                ref: "portLabel",
+                fill: "#FFFFFF",
+                fillOpacity: 0.8,
+                x: "calc(x - 2)",
+                y: "calc(y - 2)",
+                width: "calc(w + 4)",
+                height: "calc(h + 4)",
+                pointerEvents: "none",
+              },
+              pipeBody: {
+                width: "calc(w)",
+                height: "calc(h)",
+                y: "calc(h / -2)",
+                fill: {
+                  type: "linearGradient",
+                  stops: [
+                    { offset: "0%", color: "gray" },
+                    { offset: "30%", color: "white" },
+                    { offset: "70%", color: "white" },
+                    { offset: "100%", color: "gray" },
+                  ],
+                  attrs: {
+                    x1: "0%",
+                    y1: "0%",
+                    x2: "0%",
+                    y2: "100%",
                   },
                 },
-                pipeEnd: {
-                  width: 10,
-                  height: "calc(h+6)",
-                  y: "calc(h / -2 - 3)",
-                  x: "calc(w -30)",
-                  stroke: "gray",
-                  strokeWidth: 3,
-                  fill: "white",
-                },
-                portLabel: { fontFamily: "sans-serif", pointerEvents: "none" },
-                portBody: {
-                  d: "M 0 -calc(0.5 * h) h calc(w) l 3 calc(0.5 * h) l -3 calc(0.5 * h) H 0 A calc(0.5 * h) calc(0.5 * h) 1 1 1 0 -calc(0.5 * h) Z",
-                  magnet: "active",
-                },
+              },
+              pipeEnd: {
+                width: 10,
+                height: "calc(h+6)",
+                y: "calc(h / -2 - 3)",
+                x: "calc(w -30)",
+                stroke: "gray",
+                strokeWidth: 3,
+                fill: "white",
+              },
+              portLabel: { fontFamily: "sans-serif", pointerEvents: "none" },
+              portBody: {
+                d: "M 0 -calc(0.5 * h) h calc(w) l 3 calc(0.5 * h) l -3 calc(0.5 * h) H 0 A calc(0.5 * h) calc(0.5 * h) 1 1 1 0 -calc(0.5 * h) Z",
+                magnet: "active",
               },
             },
           },
-          items: [
-            {
-              id: "in1",
-              group: "in",
-            },
-            {
-              id: "out1",
-              group: "out",
-            },
-          ],
         },
-      });
-
-      const svgMarkup = {
-        tagName: "svg",
-        selector: "body",
-        attributes: {
-          xmlns: "http://www.w3.org/2000/svg",
-          viewBox: "0 0 124 124",
-          width: "124",
-          height: "124",
-        },
-        children: [MotorPumpSVG],
-      };
-
-      paper.on("link:mouseenter", (linkView) => {
-        clearTimeout(timerRef.current);
-        clearTools();
-        lastViewRef.current = linkView;
-        linkView.addTools(
-          new dia.ToolsView({
-            name: "onhover",
-            tools: [
-              new joint.linkTools.Remove({
-                distance: -60,
-                markup: [
-                  {
-                    tagName: "circle",
-                    selector: "button",
-                    attributes: {
-                      r: 10,
-                      fill: "#FFD5E8",
-                      stroke: "#FD0B88",
-                      "stroke-width": 2,
-                      cursor: "pointer",
-                    },
-                  },
-                  {
-                    tagName: "path",
-                    selector: "icon",
-                    attributes: {
-                      d: "M -4 -4 4 4 M -4 4 4 -4",
-                      fill: "none",
-                      stroke: "#333",
-                      "stroke-width": 3,
-                      "pointer-events": "none",
-                    },
-                  },
-                ],
-              }),
-            ],
-          })
-        );
-      });
-
-      paper.on("link:mouseleave", (linkView) => {
-        timerRef.current = setTimeout(() => clearTools(), 500);
-      });
-
-      paper.on("link:connect", (linkView) => {
-        const link = linkView.model;
-        const source = link.source();
-        const target = link.target();
-        log(
-          "paper<link:connect>",
-          `${link.id} now goes from ${source.port} of ${source.id} to port ${target.port} of ${target.id}.`
-        );
-      });
-
-      paper.on(
-        "link:disconnect",
-        (linkView, evt, prevElementView, prevMagnet) => {
-          const link = linkView.model;
-          const prevPort = prevElementView.findAttribute("port", prevMagnet);
-          log(
-            "paper<link:disconnect>",
-            `${link.id} disconnected from port ${prevPort} of ${prevElementView.model.id}.`
-          );
-        }
-      );
-
-      graph.on("remove", (cell) => {
-        const cellId = getCellId(cell);
-        unsubscribeCellFromDevice(cellId);
-        if (!cell.isLink()) return;
-        const source = cell.source();
-        const target = cell.target();
-        if (!target.id) {
-          linkIdCounter--;
-          return;
-        }
-        log(
-          "graph<remove>",
-          `${cell.id} between ${source.port} of ${source.id} and ${target.port} of ${target.id} was removed.`
-        );
-      });
-
-      const addElementPort = (element, port, position) => {
-        const portId = `P-${portIdCounterRef.current++}`;
-        element.addPort({
-          id: portId,
-          group: "absolute",
-          args: position,
-          ...util.merge(port, {
-            attrs: { portLabel: { text: portId } },
-          }),
-        });
-        return portId;
-      };
-
-      const PortHandle = mvc.View.extend({
-        tagName: "rect",
-        svgElement: true,
-        className: "port-handle",
-        events: {
-          mousedown: "onPointerDown",
-          touchstart: "onPointerDown",
-        },
-        documentEvents: {
-          mousemove: "onPointerMove",
-          touchmove: "onPointerMove",
-          mouseup: "onPointerUp",
-          touchend: "onPointerUp",
-          touchcancel: "onPointerUp",
-        },
-        attributes: {
-          width: 30,
-          height: 30,
-          x: -15,
-          y: -15,
-          fill: "transparent",
-          stroke: "#002b33",
-          "stroke-width": 2,
-          cursor: "grab",
-        },
-        position: function (x, y) {
-          this.vel.attr({ x: x - 15, y: y - 15 });
-        },
-        color: function (color) {
-          this.el.style.stroke = color || this.attributes.stroke;
-        },
-        onPointerDown: function (evt) {
-          if (this.options.guard(evt)) return;
-          evt.stopPropagation();
-          evt.preventDefault();
-          this.options.paper.undelegateEvents();
-          this.delegateDocumentEvents(null, evt.data);
-          this.trigger("will-change", this, evt);
-        },
-        onPointerMove: function (evt) {
-          this.trigger("changing", this, evt);
-        },
-        onPointerUp: function (evt) {
-          if (evt.detail === 2) {
-            this.trigger("remove", this, evt);
-          } else {
-            this.trigger("changed", this, evt);
-            this.undelegateDocumentEvents();
-          }
-          this.options.paper.delegateEvents();
-        },
-      });
-
-      const Ports = dia.ToolView.extend({
-        name: "ports",
-        options: {
-          handleClass: PortHandle,
-          activeColor: "#4666E5",
-        },
-        children: [
+        items: [
           {
-            tagName: "circle",
-            selector: "preview",
-            className: "joint-ports-preview",
-            attributes: {
-              r: 13,
-              "stroke-width": 2,
-              fill: "#4666E5",
-              "fill-opacity": 0.3,
-              stroke: "#4666E5",
-              "pointer-events": "none",
-            },
+            id: "in1",
+            group: "in",
+          },
+          {
+            id: "out1",
+            group: "out",
           },
         ],
-        handles: null,
-        onRender: function () {
-          this.renderChildren();
-          this.updatePreview(null);
-          this.resetHandles();
-          this.renderHandles();
-          return this;
-        },
-        update: function () {
-          const positions = this.getPortPositions();
-          if (positions.length === this.handles.length) {
-            this.updateHandles();
-          } else {
-            this.resetHandles();
-            this.renderHandles();
-          }
-          this.updatePreview(null);
-          return this;
-        },
-        resetHandles: function () {
-          const handles = this.handles;
-          this.handles = [];
-          this.stopListening();
-          if (!Array.isArray(handles)) return;
-          for (let i = 0, n = handles.length; i < n; i++) {
-            handles[i].remove();
-          }
-        },
-        renderHandles: function () {
-          const positions = this.getPortPositions();
-          for (let i = 0, n = positions.length; i < n; i++) {
-            const position = positions[i];
-            const handle = new this.options.handleClass({
-              index: i,
-              portId: position.id,
-              paper: this.paper,
-              guard: (evt) => this.guard(evt),
-            });
-            handle.render();
-            handle.position(position.x, position.y);
-            this.simulateRelatedView(handle.el);
-            handle.vel.appendTo(this.el);
-            this.handles.push(handle);
-            this.startHandleListening(handle);
-          }
-        },
-        updateHandles: function () {
-          const positions = this.getPortPositions();
-          for (let i = 0, n = positions.length; i < n; i++) {
-            const position = positions[i];
-            const handle = this.handles[i];
-            if (!handle) return;
-            handle.position(position.x, position.y);
-          }
-        },
-        updatePreview: function (x, y) {
-          const { preview } = this.childNodes;
-          if (!preview) return;
-          if (!Number.isFinite(x)) {
-            preview.setAttribute("display", "none");
-          } else {
-            preview.removeAttribute("display");
-            preview.setAttribute("transform", `translate(${x},${y})`);
-          }
-        },
-        startHandleListening: function (handle) {
-          this.listenTo(handle, "will-change", this.onHandleWillChange);
-          this.listenTo(handle, "changing", this.onHandleChanging);
-          this.listenTo(handle, "changed", this.onHandleChanged);
-          this.listenTo(handle, "remove", this.onHandleRemove);
-        },
-        onHandleWillChange: function (handle, evt) {
-          this.focus();
-          handle.color(this.options.activeColor);
-          const portNode = this.relatedView.findPortNode(
-            handle.options.portId,
-            "root"
-          );
-          portNode.style.opacity = 0.2;
-        },
-        onHandleChanging: function (handle, evt) {
-          const { x, y } = this.getPositionFromEvent(evt);
-          this.updatePreview(x, y);
-        },
-        onHandleChanged: function (handle, evt) {
-          const { relatedView } = this;
-          const { model } = relatedView;
-          const portId = handle.options.portId;
-          handle.color(null);
-          const portNode = this.relatedView.findPortNode(portId, "root");
-          portNode.style.opacity = "";
-          this.updatePreview(null);
-          const delta = this.getPositionFromEvent(evt).difference(
-            relatedView.model.position()
-          );
-          model.portProp(
-            portId,
-            "args",
-            { x: delta.x, y: delta.y },
-            { rewrite: true, tool: this.cid }
-          );
-          this.resetHandles();
-          this.renderHandles();
-        },
-        onHandleRemove: function (handle, evt) {
-          const { relatedView } = this;
-          const { model } = relatedView;
-          const portId = handle.options.portId;
-          handle.color(null);
-          const portNode = this.relatedView.findPortNode(portId, "root");
-          portNode.style.opacity = "";
-          this.updatePreview(null);
-          model.removePort(portId, { tool: this.cid });
-          this.resetHandles();
-          this.renderHandles();
-        },
-        getPortPositions: function () {
-          const { relatedView } = this;
-          const translateMatrix = relatedView.getRootTranslateMatrix();
-          const rotateMatrix = relatedView.getRootRotateMatrix();
-          const matrix = translateMatrix.multiply(rotateMatrix);
-          const groupNames = Object.keys(
-            relatedView.model.prop("ports/groups")
-          );
-          const portsPositions = {};
-          for (let i = 0, n = groupNames.length; i < n; i++) {
-            Object.assign(
-              portsPositions,
-              relatedView.model.getPortsPositions(groupNames[i])
-            );
-          }
-          const positions = [];
-          for (let id in portsPositions) {
-            const point = joint.V.transformPoint(portsPositions[id], matrix);
-            positions.push({ x: point.x, y: point.y, id });
-          }
-          return positions;
-        },
-        getPositionFromEvent: function (evt) {
-          const { relatedView } = this;
-          const bbox = relatedView.model.getBBox();
-          const [, x, y] = relatedView.paper.getPointerArgs(evt);
-          const p = new joint.g.Point(x, y);
-          if (bbox.containsPoint(p)) {
-            return p;
-          }
-          return bbox.pointNearestToPoint(p);
-        },
-        onRemove: function () {
-          this.resetHandles();
-        },
-      });
+      },
+    });
 
-      return () => {
-        deviceSubscriptions.current.forEach((unsubscribe) => unsubscribe());
-        deviceSubscriptions.current.clear();
-        cellDeviceData.current.clear();
-        paper.remove();
-        stencil.remove();
-      };
-    },
-    []
-  );
+    const svgMarkup = {
+      tagName: "svg",
+      selector: "body",
+      attributes: {
+        xmlns: "http://www.w3.org/2000/svg",
+        viewBox: "0 0 124 124",
+        width: "124",
+        height: "124",
+      },
+      children: [MotorPumpSVG],
+    };
+
+    paper.on("link:mouseenter", (linkView) => {
+      clearTimeout(timerRef.current);
+      clearTools();
+      lastViewRef.current = linkView;
+      linkView.addTools(
+        new dia.ToolsView({
+          name: "onhover",
+          tools: [
+            new joint.linkTools.Remove({
+              distance: -60,
+              markup: [
+                {
+                  tagName: "circle",
+                  selector: "button",
+                  attributes: {
+                    r: 10,
+                    fill: "#FFD5E8",
+                    stroke: "#FD0B88",
+                    "stroke-width": 2,
+                    cursor: "pointer",
+                  },
+                },
+                {
+                  tagName: "path",
+                  selector: "icon",
+                  attributes: {
+                    d: "M -4 -4 4 4 M -4 4 4 -4",
+                    fill: "none",
+                    stroke: "#333",
+                    "stroke-width": 3,
+                    "pointer-events": "none",
+                  },
+                },
+              ],
+            }),
+          ],
+        })
+      );
+    });
+
+    paper.on("link:mouseleave", (linkView) => {
+      timerRef.current = setTimeout(() => clearTools(), 500);
+    });
+
+    paper.on("link:connect", (linkView) => {
+      const link = linkView.model;
+      const source = link.source();
+      const target = link.target();
+      log(
+        "paper<link:connect>",
+        `${link.id} now goes from ${source.port} of ${source.id} to port ${target.port} of ${target.id}.`
+      );
+    });
+
+    paper.on(
+      "link:disconnect",
+      (linkView, evt, prevElementView, prevMagnet) => {
+        const link = linkView.model;
+        const prevPort = prevElementView.findAttribute("port", prevMagnet);
+        log(
+          "paper<link:disconnect>",
+          `${link.id} disconnected from port ${prevPort} of ${prevElementView.model.id}.`
+        );
+      }
+    );
+
+    graph.on("remove", (cell) => {
+      const cellId = getCellId(cell);
+      unsubscribeCellFromDevice(cellId);
+      if (!cell.isLink()) return;
+      const source = cell.source();
+      const target = cell.target();
+      if (!target.id) {
+        linkIdCounter--;
+        return;
+      }
+      log(
+        "graph<remove>",
+        `${cell.id} between ${source.port} of ${source.id} and ${target.port} of ${target.id} was removed.`
+      );
+    });
+
+    const addElementPort = (element, port, position) => {
+      const portId = `P-${portIdCounterRef.current++}`;
+      element.addPort({
+        id: portId,
+        group: "absolute",
+        args: position,
+        ...util.merge(port, {
+          attrs: { portLabel: { text: portId } },
+        }),
+      });
+      return portId;
+    };
+
+    const PortHandle = mvc.View.extend({
+      tagName: "rect",
+      svgElement: true,
+      className: "port-handle",
+      events: {
+        mousedown: "onPointerDown",
+        touchstart: "onPointerDown",
+      },
+      documentEvents: {
+        mousemove: "onPointerMove",
+        touchmove: "onPointerMove",
+        mouseup: "onPointerUp",
+        touchend: "onPointerUp",
+        touchcancel: "onPointerUp",
+      },
+      attributes: {
+        width: 30,
+        height: 30,
+        x: -15,
+        y: -15,
+        fill: "transparent",
+        stroke: "#002b33",
+        "stroke-width": 2,
+        cursor: "grab",
+      },
+      position: function (x, y) {
+        this.vel.attr({ x: x - 15, y: y - 15 });
+      },
+      color: function (color) {
+        this.el.style.stroke = color || this.attributes.stroke;
+      },
+      onPointerDown: function (evt) {
+        if (this.options.guard(evt)) return;
+        evt.stopPropagation();
+        evt.preventDefault();
+        this.options.paper.undelegateEvents();
+        this.delegateDocumentEvents(null, evt.data);
+        this.trigger("will-change", this, evt);
+      },
+      onPointerMove: function (evt) {
+        this.trigger("changing", this, evt);
+      },
+      onPointerUp: function (evt) {
+        if (evt.detail === 2) {
+          this.trigger("remove", this, evt);
+        } else {
+          this.trigger("changed", this, evt);
+          this.undelegateDocumentEvents();
+        }
+        this.options.paper.delegateEvents();
+      },
+    });
+
+    const Ports = dia.ToolView.extend({
+      name: "ports",
+      options: {
+        handleClass: PortHandle,
+        activeColor: "#4666E5",
+      },
+      children: [
+        {
+          tagName: "circle",
+          selector: "preview",
+          className: "joint-ports-preview",
+          attributes: {
+            r: 13,
+            "stroke-width": 2,
+            fill: "#4666E5",
+            "fill-opacity": 0.3,
+            stroke: "#4666E5",
+            "pointer-events": "none",
+          },
+        },
+      ],
+      handles: null,
+      onRender: function () {
+        this.renderChildren();
+        this.updatePreview(null);
+        this.resetHandles();
+        this.renderHandles();
+        return this;
+      },
+      update: function () {
+        const positions = this.getPortPositions();
+        if (positions.length === this.handles.length) {
+          this.updateHandles();
+        } else {
+          this.resetHandles();
+          this.renderHandles();
+        }
+        this.updatePreview(null);
+        return this;
+      },
+      resetHandles: function () {
+        const handles = this.handles;
+        this.handles = [];
+        this.stopListening();
+        if (!Array.isArray(handles)) return;
+        for (let i = 0, n = handles.length; i < n; i++) {
+          handles[i].remove();
+        }
+      },
+      renderHandles: function () {
+        const positions = this.getPortPositions();
+        for (let i = 0, n = positions.length; i < n; i++) {
+          const position = positions[i];
+          const handle = new this.options.handleClass({
+            index: i,
+            portId: position.id,
+            paper: this.paper,
+            guard: (evt) => this.guard(evt),
+          });
+          handle.render();
+          handle.position(position.x, position.y);
+          this.simulateRelatedView(handle.el);
+          handle.vel.appendTo(this.el);
+          this.handles.push(handle);
+          this.startHandleListening(handle);
+        }
+      },
+      updateHandles: function () {
+        const positions = this.getPortPositions();
+        for (let i = 0, n = positions.length; i < n; i++) {
+          const position = positions[i];
+          const handle = this.handles[i];
+          if (!handle) return;
+          handle.position(position.x, position.y);
+        }
+      },
+      updatePreview: function (x, y) {
+        const { preview } = this.childNodes;
+        if (!preview) return;
+        if (!Number.isFinite(x)) {
+          preview.setAttribute("display", "none");
+        } else {
+          preview.removeAttribute("display");
+          preview.setAttribute("transform", `translate(${x},${y})`);
+        }
+      },
+      startHandleListening: function (handle) {
+        this.listenTo(handle, "will-change", this.onHandleWillChange);
+        this.listenTo(handle, "changing", this.onHandleChanging);
+        this.listenTo(handle, "changed", this.onHandleChanged);
+        this.listenTo(handle, "remove", this.onHandleRemove);
+      },
+      onHandleWillChange: function (handle, evt) {
+        this.focus();
+        handle.color(this.options.activeColor);
+        const portNode = this.relatedView.findPortNode(
+          handle.options.portId,
+          "root"
+        );
+        portNode.style.opacity = 0.2;
+      },
+      onHandleChanging: function (handle, evt) {
+        const { x, y } = this.getPositionFromEvent(evt);
+        this.updatePreview(x, y);
+      },
+      onHandleChanged: function (handle, evt) {
+        const { relatedView } = this;
+        const { model } = relatedView;
+        const portId = handle.options.portId;
+        handle.color(null);
+        const portNode = this.relatedView.findPortNode(portId, "root");
+        portNode.style.opacity = "";
+        this.updatePreview(null);
+        const delta = this.getPositionFromEvent(evt).difference(
+          relatedView.model.position()
+        );
+        model.portProp(
+          portId,
+          "args",
+          { x: delta.x, y: delta.y },
+          { rewrite: true, tool: this.cid }
+        );
+        this.resetHandles();
+        this.renderHandles();
+      },
+      onHandleRemove: function (handle, evt) {
+        const { relatedView } = this;
+        const { model } = relatedView;
+        const portId = handle.options.portId;
+        handle.color(null);
+        const portNode = this.relatedView.findPortNode(portId, "root");
+        portNode.style.opacity = "";
+        this.updatePreview(null);
+        model.removePort(portId, { tool: this.cid });
+        this.resetHandles();
+        this.renderHandles();
+      },
+      getPortPositions: function () {
+        const { relatedView } = this;
+        const translateMatrix = relatedView.getRootTranslateMatrix();
+        const rotateMatrix = relatedView.getRootRotateMatrix();
+        const matrix = translateMatrix.multiply(rotateMatrix);
+        const groupNames = Object.keys(relatedView.model.prop("ports/groups"));
+        const portsPositions = {};
+        for (let i = 0, n = groupNames.length; i < n; i++) {
+          Object.assign(
+            portsPositions,
+            relatedView.model.getPortsPositions(groupNames[i])
+          );
+        }
+        const positions = [];
+        for (let id in portsPositions) {
+          const point = joint.V.transformPoint(portsPositions[id], matrix);
+          positions.push({ x: point.x, y: point.y, id });
+        }
+        return positions;
+      },
+      getPositionFromEvent: function (evt) {
+        const { relatedView } = this;
+        const bbox = relatedView.model.getBBox();
+        const [, x, y] = relatedView.paper.getPointerArgs(evt);
+        const p = new joint.g.Point(x, y);
+        if (bbox.containsPoint(p)) {
+          return p;
+        }
+        return bbox.pointNearestToPoint(p);
+      },
+      onRemove: function () {
+        this.resetHandles();
+      },
+    });
+
+    return () => {
+      deviceSubscriptions.current.forEach((unsubscribe) => unsubscribe());
+      deviceSubscriptions.current.clear();
+      cellDeviceData.current.clear();
+      paper.remove();
+      stencil.remove();
+    };
+  }, []);
 
   useEffect(() => {
     if (selectedCell) {
@@ -2154,12 +2257,12 @@ useEffect(() => {
       const cellId = getCellId(selectedCell);
       const data = cellDeviceData.current.get(cellId);
       if (data) {
-      //  updateCellDisplay(selectedCell, data);
+        //  updateCellDisplay(selectedCell, data);
       }
     }
   };
 
- return (
+  return (
     <>
       <style>{`
         @keyframes pulse {
@@ -2214,7 +2317,8 @@ useEffect(() => {
           position="static"
           elevation={4}
           sx={{
-            boxShadow: "0px 3.8580212593px 7.7160425186px 0px rgba(0,0,0,.1019607843)",
+            boxShadow:
+              "0px 3.8580212593px 7.7160425186px 0px rgba(0,0,0,.1019607843)",
           }}
         >
           <Toolbar>
@@ -2386,7 +2490,11 @@ useEffect(() => {
                   </Select>
                 </FormControl>
 
-                <FormControl fullWidth variant="outlined" disabled={!selectedEUI}>
+                <FormControl
+                  fullWidth
+                  variant="outlined"
+                  disabled={!selectedEUI}
+                >
                   <InputLabel>Device ID</InputLabel>
                   <Select
                     value={selectedDevice}
@@ -2401,23 +2509,23 @@ useEffect(() => {
                     ))}
                   </Select>
                 </FormControl>
-{selectedDevice && Object.keys(payload).length > 0 && (
-  <FormControl component="fieldset" fullWidth>
-    <Typography variant="subtitle2">Display Value:</Typography>
-    <Select
-      value={selectedValue}
-      onChange={handleValueChange}
-      size="small"
-      displayEmpty
-    >
-      {availableValues.map((value) => (
-        <MenuItem key={value} value={value}>
-          {value}
-        </MenuItem>
-      ))}
-    </Select>
-  </FormControl>
-)}
+                {selectedDevice && Object.keys(payload).length > 0 && (
+                  <FormControl component="fieldset" fullWidth>
+                    <Typography variant="subtitle2">Display Value:</Typography>
+                    <Select
+                      value={selectedValue}
+                      onChange={handleValueChange}
+                      size="small"
+                      displayEmpty
+                    >
+                      {availableValues.map((value) => (
+                        <MenuItem key={value} value={value}>
+                          {value}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                )}
                 {/* {selectedDevice && Object.keys(payload).length > 0 && (
                   <FormControl component="fieldset">
                     <Typography variant="subtitle2">Display Value:</Typography>
@@ -2438,8 +2546,10 @@ useEffect(() => {
                 )} */}
 
                 <Box className="animation-controls">
-                  <Typography variant="subtitle2">Animation Controls</Typography>
-                  
+                  <Typography variant="subtitle2">
+                    Animation Controls
+                  </Typography>
+
                   <FormControl fullWidth sx={{ mb: 2, mt: 1 }}>
                     <InputLabel>Animation Type</InputLabel>
                     <Select
@@ -2454,7 +2564,9 @@ useEffect(() => {
                     </Select>
                   </FormControl>
 
-                  <Typography variant="body2" sx={{ mt: 1 }}>Animation Speed</Typography>
+                  <Typography variant="body2" sx={{ mt: 1 }}>
+                    Animation Speed
+                  </Typography>
                   <input
                     type="range"
                     min="0.5"
@@ -2464,21 +2576,25 @@ useEffect(() => {
                     onChange={handleAnimationSpeedChange}
                     className="animation-speed-slider"
                   />
-                  <Typography variant="caption" display="block" textAlign="center">
+                  <Typography
+                    variant="caption"
+                    display="block"
+                    textAlign="center"
+                  >
                     {animationSpeed.toFixed(1)}x
                   </Typography>
 
-                  <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
-                    <Button 
-                      variant="contained" 
+                  <Box sx={{ display: "flex", gap: 1, mt: 2 }}>
+                    <Button
+                      variant="contained"
                       onClick={handleStartAnimation}
                       fullWidth
                       size="small"
                     >
                       Start
                     </Button>
-                    <Button 
-                      variant="outlined" 
+                    <Button
+                      variant="outlined"
                       onClick={handleStopAnimation}
                       fullWidth
                       size="small"
@@ -2505,6 +2621,5 @@ useEffect(() => {
     </>
   );
 };
-
 
 export default DashboardEditor;
