@@ -30,6 +30,8 @@ import VatAgitator from "../../../WidgetSVG/VatAgitator";
 import Chille from "../../../WidgetSVG/Chiller";
 import IceBank from "../../../WidgetSVG/IceBank";
 import ACFan from "../../../WidgetSVG/ACFan";
+import VatAgitatorMixser from "../../../WidgetSVG/VatAgitatorMixser";
+
 
 import {
   listenForDeviceModels,
@@ -185,7 +187,30 @@ class TemplateImage extends joint.dia.Element {
       },
     };
   }
-
+  tankVolumeUpAnimation() {
+    // Animate the image height from 60% to 100% and back
+    this.stopAnimation(); // Stop any previous animation
+    this.attr("image/data-animated", true);
+    this.attr("image/class", "tank-volume-up");
+    // Animate the height attribute
+    let up = true;
+    let step = 0;
+    const maxStep = 40;
+    const originalHeight = this.size().height;
+    const minHeight = originalHeight * 0.6;
+    const maxHeight = originalHeight;
+    if (this._tankVolumeInterval) clearInterval(this._tankVolumeInterval);
+    this._tankVolumeInterval = setInterval(() => {
+      step = up ? step + 1 : step - 1;
+      const percent = step / maxStep;
+      const newHeight = minHeight + (maxHeight - minHeight) * percent;
+      this.attr("image/height", newHeight);
+      if (step >= maxStep) up = false;
+      if (step <= 0 && !up) up = true;
+    }, 30);
+    this.trigger("animation:tank-volume-up");
+    return this;
+  }
   preinitialize() {
     this.dataURLPrefix = "data:image/svg+xml;utf8,";
     this.markup = [
@@ -290,7 +315,9 @@ const DashboardEditor = () => {
   const [payload, setPayload] = useState({});
   const [animationType, setAnimationType] = useState("pulse");
   const [animationSpeed, setAnimationSpeed] = useState(1);
-
+const setInspectorContainer = (newValue) => {
+  inspectorContainerRef.current = newValue;
+};
   const handleStartAnimation = () => {
     if (!selectedCell) return;
 
@@ -303,6 +330,9 @@ const DashboardEditor = () => {
         break;
       case "flow":
         selectedCell.flowAnimation();
+        break;
+              case 'tank-volume-up':
+        selectedCell.tankVolumeUpAnimation();
         break;
       default:
         selectedCell.startAnimation(animationType);
@@ -1120,8 +1150,17 @@ const DashboardEditor = () => {
         size: { width: 80, height: 60 },
         cloneSize: { width: 250, height: 200 },
         attrs: {},
+      }
+      ,
+      {
+        type: "custom.TemplateImage",
+        svg: VatAgitatorMixser,
+        size: { width: 80, height: 60 },
+        cloneSize: {  width: 80, height: 120},
+        attrs: {},
       },
     ];
+    
 
     const stencilPorts = [
       {
@@ -2275,13 +2314,32 @@ const DashboardEditor = () => {
     from { transform: rotate(0deg) }
     to { transform: rotate(360deg)}
   }
+
+  @keyframes rotate3d {
+    from { transform: rotateY(0deg); }
+    to { transform: rotateY(360deg); }
+  }
   
 [data-animated="true"].rotate {
   animation: spin 2s linear infinite;
   transform-origin: center;
-  transform-box: fill-box; /* Ensures rotation around visual center */
+  transform-box: fill-box;
 }
-        
+
+[data-animated="true"].rotate3d {
+  animation: rotate3d 2s linear infinite;
+  transform-origin: center;
+  transform-style: preserve-3d;
+  perspective: 1000px;
+}
+             @keyframes tankVolumeUp {
+          0% { filter: brightness(1) drop-shadow(0 0 0 #00bcd4); }
+          50% { filter: brightness(1.2) drop-shadow(0 0 10px #00bcd4); }
+          100% { filter: brightness(1) drop-shadow(0 0 0 #00bcd4); }
+        }
+        [data-animated="true"].tank-volume-up {
+          animation: tankVolumeUp 2s infinite;
+        }   
         @keyframes bounce {
           0%, 100% { transform: translateY(0); }
           50% { transform: translateY(-10px); }
@@ -2293,6 +2351,12 @@ const DashboardEditor = () => {
         
         [data-animated="true"].rotate {
           animation: rotate 4s linear infinite;
+        }
+        
+        [data-animated="true"].rotate3d {
+          animation: rotate3d 4s linear infinite;
+            transform-origin: center;
+  transform-box: fill-box;
         }
         
         [data-animated="true"].bounce {
@@ -2526,6 +2590,23 @@ const DashboardEditor = () => {
                     </Select>
                   </FormControl>
                 )}
+
+      <FormControl fullWidth sx={{ mb: 2, mt: 1 }}>
+        <InputLabel>Animation Type</InputLabel>
+        <Select
+          value={animationType}
+          onChange={handleAnimationTypeChange}
+          label="Animation Type"
+        >
+          <MenuItem value="pulse">Pulse</MenuItem>
+          <MenuItem value="rotate">Rotate</MenuItem>
+          <MenuItem value="rotate3d">Rotate 3D</MenuItem>
+          <MenuItem value="bounce">Bounce</MenuItem>
+          <MenuItem value="flow">Flow</MenuItem>
+          <MenuItem value="tank-volume-up">Tank Volume Up</MenuItem>
+        </Select>
+      </FormControl>
+
                 {/* {selectedDevice && Object.keys(payload).length > 0 && (
                   <FormControl component="fieldset">
                     <Typography variant="subtitle2">Display Value:</Typography>
@@ -2559,6 +2640,7 @@ const DashboardEditor = () => {
                     >
                       <MenuItem value="pulse">Pulse</MenuItem>
                       <MenuItem value="rotate">Rotate</MenuItem>
+                      <MenuItem value="rotate3d">Rotate 3D</MenuItem>
                       <MenuItem value="bounce">Bounce</MenuItem>
                       <MenuItem value="flow">Flow</MenuItem>
                     </Select>
