@@ -15,6 +15,7 @@ import {
   RadioGroup,
   FormControlLabel,
   Radio,
+  Slider,  // Add this import
 } from "@mui/material";
 import { ChevronDown, Undo, Redo } from "lucide-react";
 import {
@@ -192,23 +193,7 @@ class TemplateImage extends joint.dia.Element {
     this.stopAnimation(); // Stop any previous animation
     this.attr("image/data-animated", true);
     this.attr("image/class", "tank-volume-up");
-    // Animate the height attribute
-    let up = true;
-    let step = 0;
-    const maxStep = 40;
-    const originalHeight = this.size().height;
-    const minHeight = originalHeight * 0.6;
-    const maxHeight = originalHeight;
-    if (this._tankVolumeInterval) clearInterval(this._tankVolumeInterval);
-    this._tankVolumeInterval = setInterval(() => {
-      step = up ? step + 1 : step - 1;
-      const percent = step / maxStep;
-      const newHeight = minHeight + (maxHeight - minHeight) * percent;
-      this.attr("image/height", newHeight);
-      if (step >= maxStep) up = false;
-      if (step <= 0 && !up) up = true;
-    }, 30);
-    this.trigger("animation:tank-volume-up");
+    
     return this;
   }
   preinitialize() {
@@ -284,6 +269,39 @@ class TemplateImage extends joint.dia.Element {
 
     return this;
   }
+
+  scaleHeight(percentage) {
+    const originalHeight = this.get('originalHeight') || this.size().height;
+    if (!this.get('originalHeight')) {
+      this.set('originalHeight', originalHeight);
+    }
+    const newHeight = (originalHeight * percentage) / 100;
+    const currentPos = this.position();
+    const currentHeight = this.size().height;
+    const currentWidth = this.size().width;
+    
+    // Calculate new Y position to maintain bottom anchor point
+    const newY = currentPos.y + (currentHeight - newHeight);
+    
+    // Keep the same width, only change height
+    this.resize(currentWidth, newHeight);
+    this.position(currentPos.x, newY);
+    return this;
+  }
+
+  heightAnimation() {
+    // Add a custom CSS property for the scale value
+    document.documentElement.style.setProperty('--scale-height', this.get('scaleY') || '0.2');
+    this.attr("image/data-animated", true);
+    this.attr("image/class", "height-scale");
+    return this;
+  }
+
+  setScale(value) {
+    this.set('scaleY', value);
+    document.documentElement.style.setProperty('--scale-height', value);
+    return this;
+  }
 }
 
 const DashboardEditor = () => {
@@ -315,6 +333,7 @@ const DashboardEditor = () => {
   const [payload, setPayload] = useState({});
   const [animationType, setAnimationType] = useState("pulse");
   const [animationSpeed, setAnimationSpeed] = useState(1);
+  const [heightScale, setHeightScale] = useState(100); // Add this state
 const setInspectorContainer = (newValue) => {
   inspectorContainerRef.current = newValue;
 };
@@ -333,6 +352,10 @@ const setInspectorContainer = (newValue) => {
         break;
               case 'tank-volume-up':
         selectedCell.tankVolumeUpAnimation();
+        break;
+      case 'height-scale':
+        selectedCell.heightAnimation();
+        selectedCell.scaleHeight(heightScale);
         break;
       default:
         selectedCell.startAnimation(animationType);
@@ -400,7 +423,24 @@ const setInspectorContainer = (newValue) => {
           cell.attr("label/text", `${modelName}: ${value}`);
           console.log("value2", value);
 
-          if (value == "open") {
+          // Handle tank level updates
+          if (typeof value === "number"&&modelName== "level") {
+            // Scale the tank height based on the value
+           const tankPercentage = (value / 100) * 100; // Assuming value is 0-100
+            // cell.scaleHeight(tankPercentage);
+             const scaleValue = 0.2 + (value / 100) * 0.8;
+            // Update both height and CSS scale
+            cell.setScale(scaleValue);
+            // Add animation effect
+            cell.attr("image/data-animated", true);
+            cell.attr("image/class", "height-scale");
+
+            // Update color based on level
+            const normalizedValue = Math.min(Math.max(value / 100, 0), 1);
+            const hue = (1 - normalizedValue) * 120;
+            cell.attr("body/fill", `hsl(${hue}, 100%, 80%)`);
+          }
+       else   if (value == "open") {
             selectedCell.rotate();
             const imageEl = document.querySelector(
               `[model-id="${selectedCell.id}"] image`
@@ -408,9 +448,20 @@ const setInspectorContainer = (newValue) => {
             if (imageEl) {
               imageEl.style.animationDuration = `${2 / animationSpeed}s`;
             }
-          } else {
+          } 
+          
+              else   if (modelName== "running_status"&& value == "on") {
+   selectedCell.tankVolumeUpAnimation();
+   const imageEl = document.querySelector(
+              `[model-id="${selectedCell.id}"] image`
+            );
+            if (imageEl) {
+              imageEl.style.animationDuration = `${2 / animationSpeed}s`;
+            }
+              }
+          else {
             if (selectedCell) {
-              // selectedCell.stopAnimation();
+              selectedCell.stopAnimation();
             }
           }
           if (typeof value === "number") {
@@ -850,13 +901,14 @@ const setInspectorContainer = (newValue) => {
             device: { label: "Device Settings", index: 4 },
             actions: { label: "Actions", index: 5 },
           },
-          groupState: {
-            text: { open: true },
-            appearance: { open: true },
-            size: { open: true },
-            device: { open: true },
-            actions: { open: true },
-          },
+          groupState:
+            {
+              text: { open: true },
+              appearance: { open: true },
+              size: { open: true },
+              device: { open: true },
+              actions: { open: true },
+            },
         }
       );
     });
@@ -2301,11 +2353,20 @@ const setInspectorContainer = (newValue) => {
     }
   };
 
+  const handleHeightChange = (event) => {
+    const height = parseFloat(event.target.value);
+    setHeightScale(height);
+    if (selectedCell) {
+      selectedCell.scaleHeight(height);
+    }
+  };
+
   return (
     <>
       <style>{`
         @keyframes pulse {
           0% { opacity: 0.7; transform: scale(0.95); }
+         
           50% { opacity: 1; transform: scale(1.05); }
           100% { opacity: 0.7; transform: scale(0.95); }
         }
@@ -2361,6 +2422,18 @@ const setInspectorContainer = (newValue) => {
         
         [data-animated="true"].bounce {
           animation: bounce 1s ease infinite;
+        }
+        
+        @keyframes height-scale {
+          0% { transform: scaleY(var(--scale-height, 0.2)); }
+          50% { transform: scaleY(var(--scale-height, 0.2)); }
+          100% { transform: scaleY(var(--scale-height, 0.2)); }
+        }
+        
+        [data-animated="true"].height-scale {
+          animation: height-scale 2s ease-in-out infinite;
+          transform-origin: bottom;
+          transform-box: fill-box;
         }
         
         .animation-controls {
@@ -2604,8 +2677,24 @@ const setInspectorContainer = (newValue) => {
           <MenuItem value="bounce">Bounce</MenuItem>
           <MenuItem value="flow">Flow</MenuItem>
           <MenuItem value="tank-volume-up">Tank Volume Up</MenuItem>
+          <MenuItem value="height-scale">Height Scale</MenuItem>
         </Select>
       </FormControl>
+
+      {animationType === 'height-scale' && (
+        <Box sx={{ mt: 2 }}>
+          <Typography variant="body2">Height Scale (%)</Typography>
+          <Slider
+            value={heightScale}
+            onChange={handleHeightChange}
+            min={0}
+            max={100}
+            step={1}
+            valueLabelDisplay="auto"
+            sx={{ mt: 1 }}
+          />
+        </Box>
+      )}
 
                 {/* {selectedDevice && Object.keys(payload).length > 0 && (
                   <FormControl component="fieldset">
