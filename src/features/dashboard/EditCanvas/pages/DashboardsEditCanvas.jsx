@@ -32,6 +32,10 @@ import Chille from "../../../WidgetSVG/Chiller";
 import IceBank from "../../../WidgetSVG/IceBank";
 import ACFan from "../../../WidgetSVG/ACFan";
 import VatAgitatorMixser from "../../../WidgetSVG/VatAgitatorMixser";
+import VatAgitatorLevel from "../../../WidgetSVG/VatAgitatorLevel";
+
+
+
 
 
 import {
@@ -1207,6 +1211,13 @@ const setInspectorContainer = (newValue) => {
       {
         type: "custom.TemplateImage",
         svg: VatAgitatorMixser,
+        size: { width: 80, height: 60 },
+        cloneSize: {  width: 80, height: 120},
+        attrs: {},
+      },
+      {
+        type: "custom.TemplateImage",
+        svg: VatAgitatorLevel,
         size: { width: 80, height: 60 },
         cloneSize: {  width: 80, height: 120},
         attrs: {},
