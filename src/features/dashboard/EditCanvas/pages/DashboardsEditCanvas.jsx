@@ -426,7 +426,6 @@ const setInspectorContainer = (newValue) => {
     if (!cell || !data) return;
 
     const payload = data || {};
-    // const value = payload[selectedValue];
 
     console.log("payload01", data);
     console.log("asas selectedEUI", selectedEUI);
@@ -437,83 +436,106 @@ const setInspectorContainer = (newValue) => {
       selectedDevice,
       selectedValue,
       (value) => {
-        if (typeof value !== "undefined") {
-          const modelName =formatKey( selectedValue)|| "Device";
-          cell.attr("label/text", `${modelName}: ${value}`);
-          console.log("value2", value);
-
-          // Handle tank level updates
-          if (typeof value === "number"&&selectedValue== "level") {
-            // Scale the tank height based on the value
-           const tankPercentage = (value / 100) * 100; // Assuming value is 0-100
-            // cell.scaleHeight(tankPercentage);
-             const scaleValue = 0.2 + (value / 100) * 0.8;
-            // Update both height and CSS scale
-            cell.setScale(scaleValue);
-            // Add animation effect
-            cell.attr("image/data-animated", true);
-            cell.attr("image/class", "height-scale");
-
-            // Update color based on level
-            const normalizedValue = Math.min(Math.max(value / 100, 0), 1);
-            const hue = (1 - normalizedValue) * 120;
-            cell.attr("body/fill", `hsl(${hue}, 100%, 80%)`);
-          }
-       else   if (value == "open") {
-            selectedCell.rotate();
-            const imageEl = document.querySelector(
-              `[model-id="${selectedCell.id}"] image`
-            );
-            if (imageEl) {
-              imageEl.style.animationDuration = `${2 / animationSpeed}s`;
-            }
-          } 
-          
-              else   if (selectedValue== "running_status"&& value == "on") {
-   selectedCell.tankVolumeUpAnimation();
-   const imageEl = document.querySelector(
-              `[model-id="${selectedCell.id}"] image`
-            );
-            if (imageEl) {
-              imageEl.style.animationDuration = `${2 / animationSpeed}s`;
-            }
-              }
-          else {
+        try {
+          if (typeof value !== "undefined") {
+            let displayText;
             try {
-              if (selectedCell) {
-                selectedCell.stopAnimation();
+              const modelName = formatKey(selectedValue) || "Device";
+              if (typeof value === "number") {
+                // Format numbers with 2 decimal places
+                displayText = `${modelName}: ${value.toFixed(2)}`;
+              } else if (typeof value === "boolean") {
+                // Convert boolean to "On"/"Off"
+                displayText = `${modelName}: ${value ? "On" : "Off"}`;
+              } else if (value === null || value === "") {
+                // Handle null or empty values
+                displayText = `${modelName}: N/A`;
+              } else {
+                // Default case for strings and other types
+                displayText = `${modelName}: ${value}`;
               }
-            } catch (error) {
-              console.error("Error stopping cell animation:", error);
-              // Attempt to reset animation state
-              try {
-                if (selectedCell) {
-                  selectedCell.attr("image/data-animated", false);
-                  selectedCell.attr("image/class", "");
-                }
-              } catch (recoveryError) {
-                console.error("Failed to reset animation state:", recoveryError);
-              }
+              cell.attr("label/text", displayText);
+            } catch (labelError) {
+              console.error("Error formatting label:", labelError);
+              cell.attr("label/text", "Error: Invalid Value");
             }
-          }
-          if (typeof value === "number") {
-            const range = deviceModels[cell.prop("custom/deviceModel")]
-              ?.range || [0, 100];
-            const normalizedValue = Math.min(
-              Math.max((value - range[0]) / (range[1] - range[0]), 0),
-              1
-            );
-            console.log("normalizedValue", normalizedValue);
-            const hue = (1 - normalizedValue) * 120; // Green (0) to Red (120)
-            cell.attr("body/fill", `hsl(${hue}, 100%, 80%)`);
-          } else {
-            cell.attr("body/fill", "#e0e0e0");
-          }
-        }
-      }
-    );
 
-    unsubscribe();
+            // Handle tank level updates
+            if (typeof value === "number"&&selectedValue== "level") {
+              // Scale the tank height based on the value
+             const tankPercentage = (value / 100) * 100; // Assuming value is 0-100
+             // cell.scaleHeight(tankPercentage);
+              const scaleValue = 0.2 + (value / 100) * 0.8;
+             // Update both height and CSS scale
+             cell.setScale(scaleValue);
+             // Add animation effect
+             cell.attr("image/data-animated", true);
+             cell.attr("image/class", "height-scale");
+
+             // Update color based on level
+             const normalizedValue = Math.min(Math.max(value / 100, 0), 1);
+             const hue = (1 - normalizedValue) * 120;
+             cell.attr("body/fill", `hsl(${hue}, 100%, 80%)`);
+            }
+         else   if (value == "open") {
+               selectedCell.rotate();
+               const imageEl = document.querySelector(
+                 `[model-id="${selectedCell.id}"] image`
+               );
+               if (imageEl) {
+                 imageEl.style.animationDuration = `${2 / animationSpeed}s`;
+               }
+             } 
+             
+                 else   if (selectedValue== "running_status"&& value == "on") {
+    selectedCell.tankVolumeUpAnimation();
+    const imageEl = document.querySelector(
+                 `[model-id="${selectedCell.id}"] image`
+               );
+               if (imageEl) {
+                 imageEl.style.animationDuration = `${2 / animationSpeed}s`;
+               }
+                 }
+           else {
+             try {
+               if (selectedCell) {
+                 selectedCell.stopAnimation();
+               }
+             } catch (error) {
+               console.error("Error stopping cell animation:", error);
+               // Attempt to reset animation state
+               try {
+                 if (selectedCell) {
+                   selectedCell.attr("image/data-animated", false);
+                   selectedCell.attr("image/class", "");
+                 }
+               } catch (recoveryError) {
+                 console.error("Failed to reset animation state:", recoveryError);
+               }
+             }
+           }
+           if (typeof value === "number") {
+             const range = deviceModels[cell.prop("custom/deviceModel")]
+               ?.range || [0, 100];
+             const normalizedValue = Math.min(
+               Math.max((value - range[0]) / (range[1] - range[0]), 0),
+               1
+             );
+             console.log("normalizedValue", normalizedValue);
+             const hue = (1 - normalizedValue) * 120; // Green (0) to Red (120)
+             cell.attr("body/fill", `hsl(${hue}, 100%, 80%)`);
+           } else {
+             cell.attr("body/fill", "#e0e0e0");
+           }
+         }
+       } catch (error) {
+         console.error("Error updating cell display:", error);
+         cell.attr("label/text", "Error: Update Failed");
+       }
+    }
+  );
+
+  unsubscribe();
   };
   const subscribeCellToDevice = (cell, eui, deviceId, deviceModel) => {
     const cellId = getCellId(cell);
