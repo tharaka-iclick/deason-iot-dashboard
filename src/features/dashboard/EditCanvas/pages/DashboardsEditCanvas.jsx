@@ -387,8 +387,23 @@ const setInspectorContainer = (newValue) => {
   };
 
   const handleStopAnimation = () => {
-    if (selectedCell) {
+    try {
+      if (!selectedCell) {
+        console.warn("No cell selected to stop animation");
+        return;
+      }
       selectedCell.stopAnimation();
+    } catch (error) {
+      console.error("Error stopping animation:", error);
+      // Attempt recovery by resetting animation states
+      try {
+        if (selectedCell) {
+          selectedCell.attr("image/data-animated", false);
+          selectedCell.attr("image/class", "");
+        }
+      } catch (recoveryError) {
+        console.error("Failed to recover from animation error:", recoveryError);
+      }
     }
   };
 
@@ -423,12 +438,12 @@ const setInspectorContainer = (newValue) => {
       selectedValue,
       (value) => {
         if (typeof value !== "undefined") {
-          const modelName = selectedValue || "Device";
+          const modelName =formatKey( selectedValue)|| "Device";
           cell.attr("label/text", `${modelName}: ${value}`);
           console.log("value2", value);
 
           // Handle tank level updates
-          if (typeof value === "number"&&modelName== "level") {
+          if (typeof value === "number"&&selectedValue== "level") {
             // Scale the tank height based on the value
            const tankPercentage = (value / 100) * 100; // Assuming value is 0-100
             // cell.scaleHeight(tankPercentage);
@@ -454,7 +469,7 @@ const setInspectorContainer = (newValue) => {
             }
           } 
           
-              else   if (modelName== "running_status"&& value == "on") {
+              else   if (selectedValue== "running_status"&& value == "on") {
    selectedCell.tankVolumeUpAnimation();
    const imageEl = document.querySelector(
               `[model-id="${selectedCell.id}"] image`
@@ -464,8 +479,21 @@ const setInspectorContainer = (newValue) => {
             }
               }
           else {
-            if (selectedCell) {
-              selectedCell.stopAnimation();
+            try {
+              if (selectedCell) {
+                selectedCell.stopAnimation();
+              }
+            } catch (error) {
+              console.error("Error stopping cell animation:", error);
+              // Attempt to reset animation state
+              try {
+                if (selectedCell) {
+                  selectedCell.attr("image/data-animated", false);
+                  selectedCell.attr("image/class", "");
+                }
+              } catch (recoveryError) {
+                console.error("Failed to reset animation state:", recoveryError);
+              }
             }
           }
           if (typeof value === "number") {
