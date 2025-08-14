@@ -496,6 +496,15 @@ const setInspectorContainer = (newValue) => {
                  imageEl.style.animationDuration = `${2 / animationSpeed}s`;
                }
                  }
+                                  else   if (selectedValue== "agi_mixer"&& value == "on") {
+    selectedCell.startAnimation("rotate3d");
+    const imageEl = document.querySelector(
+                 `[model-id="${selectedCell.id}"] image`
+               );
+               if (imageEl) {
+                 imageEl.style.animationDuration = `${2 / animationSpeed}s`;
+               }
+                 }
            else {
              try {
                if (selectedCell) {
