@@ -120,57 +120,6 @@ class PlantChiller extends joint.dia.Element {
               },
             },
           },
-          out2: {
-            position: {
-              name: "right",
-              args: { x: 712, y: 440.928 },
-            },
-            markup: joint.util.svg`
-              <g @selector="portRoot">
-                <rect @selector="pipeBody" />
-                <rect @selector="pipeEnd" />
-                <rect @selector="pipeEndStroke" />
-              </g>
-            `,
-            size: { width: 37.7213, height: 61.982 },
-            attrs: {
-              portRoot: {
-                magnetSelector: "pipeEnd",
-              },
-              pipeBody: {
-                width: 37.7213,
-                height: 61.982,
-                fill: {
-                  type: "linearGradient",
-                  stops: [
-                    { offset: "0.00480769", color: "#737373" },
-                    { offset: "0.346154", color: "white" },
-                    { offset: "0.682692", color: "white" },
-                    { offset: "1", color: "#737373" },
-                  ],
-                  attrs: { x1: "50%", y1: "0%", x2: "50%", y2: "100%" },
-                },
-                magnet: "active", // Output port: can initiate outgoing connections
-              },
-              pipeEnd: {
-                width: 6.77049,
-                height: 77.1171,
-                x: 37.7213,
-                y: -7.928,
-                fill: "#808080",
-                magnet: "active",
-              },
-              pipeEndStroke: {
-                width: 10.5082,
-                height: 73.1171,
-                x: 46.4918,
-                y: -5.928,
-                fill: "white",
-                stroke: "#808080",
-                strokeWidth: 4,
-              },
-            },
-          },
         },
       },
     };

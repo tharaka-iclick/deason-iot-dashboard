@@ -28,11 +28,12 @@ import HeatPumpSVG from "../../../WidgetSVG/HeatPumpSVG";
 // import CoolingPlate from "../../../WidgetSVG/CoolingPlate";
 import VatAgitator from "../../../WidgetSVG/VatAgitator";
 import Chille from "../../../WidgetSVG/Chiller";
-import IceBank from "../../../WidgetSVG/IceBank";
+// import IceBank from "../../../WidgetSVG/IceBank";
 import ACFan from "../../../WidgetSVG/ACFan";
 
 import CoolingPlate from "../../../Widgets/CoolingPlate";
 import MotorPump from "../../../Widgets/MotorPump";
+import IceBank from "../../../Widgets/IceBank";
 import PlantChiller from "../../../Widgets/PlantChiller";
 import {
   VatWithAgitator,
@@ -1116,6 +1117,7 @@ const DashboardEditor = () => {
   joint.shapes.custom.VatWithAgitator = VatWithAgitator;
   joint.shapes.custom.MotorPump = MotorPump;
   joint.shapes.custom.PlantChiller = PlantChiller;
+  joint.shapes.custom.IceBank = IceBank;
 
   const [isLoadingEUIs, setIsLoadingEUIs] = useState(true);
   const [isLoadingDeviceIDs, setIsLoadingDeviceIDs] = useState(false);
@@ -1134,6 +1136,7 @@ const DashboardEditor = () => {
       VatWithAgitatorView,
       MotorPump,
       PlantChiller,
+      IceBank,
     };
     const graph = new dia.Graph({}, { cellNamespace: namespace });
     const commandManager = new dia.CommandManager({ graph: graph });
@@ -1604,6 +1607,22 @@ const DashboardEditor = () => {
           label: { text: "MotorPump" },
         },
       }),
+      new IceBank({
+        position: { x: 10, y: 10 },
+        size: { width: 100, height: 80 },
+        cloneSize: { width: 270, height: 200 },
+        ports: {
+          items: [
+            { id: "in1", group: "in" },
+            { id: "in2", group: "in" },
+            { id: "out2", group: "out" },
+            { id: "out4", group: "out" },
+          ],
+        },
+        attrs: {
+          label: { text: "MotorPump" },
+        },
+      }),
       {
         type: "standard.Rectangle",
         size: { width: 100, height: 60 },
@@ -1665,13 +1684,13 @@ const DashboardEditor = () => {
         cloneSize: { width: 250, height: 200 },
         attrs: {},
       },
-      {
-        type: "custom.TemplateImage",
-        svg: IceBank,
-        size: { width: 80, height: 60 },
-        cloneSize: { width: 250, height: 200 },
-        attrs: {},
-      },
+      // {
+      //   type: "custom.TemplateImage",
+      //   svg: IceBank,
+      //   size: { width: 80, height: 60 },
+      //   cloneSize: { width: 250, height: 200 },
+      //   attrs: {},
+      // },
       {
         type: "custom.TemplateImage",
         svg: ACFan,
