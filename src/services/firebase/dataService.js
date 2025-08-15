@@ -51,3 +51,7 @@ export const listenForSensoreData = (devEui, deviceId,senseorData, callback) => 
   });
   return () => off(payloadRef, listener);
 };
+
+export const saveDashboardToStorage = async (diagramData, filename) => {
+
+}

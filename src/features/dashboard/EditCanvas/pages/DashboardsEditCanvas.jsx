@@ -17,7 +17,9 @@ import {
   Radio,
   Slider,  // Add this import
 } from "@mui/material";
-import { ChevronDown, Undo, Redo } from "lucide-react";
+import { ChevronDown, Undo, Redo, ArrowLeft, Save } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { SaveDialog } from "../../../../shared/components/ui";
 import {
   Pipe01,
   // PipeView01,
@@ -309,6 +311,9 @@ class TemplateImage extends joint.dia.Element {
 }
 
 const DashboardEditor = () => {
+  const navigate = useNavigate();
+
+  // Refs
   const paperContainerRef = useRef(null);
   const stencilContainerRef = useRef(null);
   const paperRef = useRef(null);
@@ -338,6 +343,7 @@ const DashboardEditor = () => {
   const [animationType, setAnimationType] = useState("pulse");
   const [animationSpeed, setAnimationSpeed] = useState(1);
   const [heightScale, setHeightScale] = useState(100); // Add this state
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
 const setInspectorContainer = (newValue) => {
   inspectorContainerRef.current = newValue;
 };
@@ -2529,10 +2535,26 @@ const setInspectorContainer = (newValue) => {
           }}
         >
           <Toolbar>
+            <IconButton 
+              color="inherit" 
+              onClick={() => navigate("/dashboard")}
+              sx={{ mr: 2 }}
+            >
+              <ArrowLeft size={20} />
+            </IconButton>
             <Typography variant="h6" sx={{ flexGrow: 1 }}>
               Dashboard Editor
             </Typography>
 
+
+            <IconButton 
+              color="inherit" 
+              onClick={() => setSaveDialogOpen(true)}
+              sx={{ mr: 2 }}
+            >
+              <Save size={20} />
+            </IconButton>
+            
             <Button
               color="inherit"
               onClick={handleMenuClick}
@@ -2541,6 +2563,7 @@ const setInspectorContainer = (newValue) => {
             >
               File
             </Button>
+
             <Menu
               anchorEl={anchorEl}
               open={Boolean(anchorEl)}
@@ -2859,6 +2882,17 @@ const setInspectorContainer = (newValue) => {
           </Box>
         </Box>
       </Box>
+      
+      <SaveDialog
+        open={saveDialogOpen}
+        onClose={() => setSaveDialogOpen(false)}
+        onSave={(fileName) => {
+          setCurrentFileName(fileName);
+          // You can add your save logic here
+          console.log("Saving dashboard as:", fileName);
+        }}
+        currentFileName={currentFileName}
+      />
     </>
   );
 };
