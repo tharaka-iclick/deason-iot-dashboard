@@ -885,6 +885,7 @@ const DashboardEditor = () => {
             if (selectedCell) {
               // selectedCell.stopAnimation();
             }
+            
           }
           if (typeof value === "number") {
             const range = deviceModels[cell.prop("custom/deviceModel")]
