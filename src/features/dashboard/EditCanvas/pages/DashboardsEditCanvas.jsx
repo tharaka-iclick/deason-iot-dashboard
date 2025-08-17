@@ -872,13 +872,15 @@ const DashboardEditor = () => {
           console.log("value2", value);
 
           if (value == "open") {
-            selectedCell.rotate();
-            const imageEl = document.querySelector(
-              `[model-id="${selectedCell.id}"] image`
-            );
-            if (imageEl) {
-              imageEl.style.animationDuration = `${2 / animationSpeed}s`;
-            }
+                      console.log("value2e", value);
+             toggleRunning(selectedElement)
+            // selectedCell.rotate();
+            // const imageEl = document.querySelector(
+            //   `[model-id="${selectedCell.id}"] image`
+            // );
+            // if (imageEl) {
+            //   imageEl.style.animationDuration = `${2 / animationSpeed}s`;
+            // }
           } else {
             if (selectedCell) {
               // selectedCell.stopAnimation();
@@ -3446,7 +3448,10 @@ const DashboardEditor = () => {
                           <Slider
                             value={elementData.power}
                             onChange={(e, newValue) =>
-                              handlePowerChange(selectedElement, newValue)
+                            {
+                              handlePowerChange(selectedElement, newValue);
+                                 console.log("value2", value);
+                            }
                             }
                             min={0}
                             max={1}
