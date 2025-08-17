@@ -872,8 +872,7 @@ const DashboardEditor = () => {
           console.log("value2", value);
 
           if (value == "open") {
-                      console.log("value2e", value);
-             toggleRunning(selectedElement)
+                toggleRunning(selectedElement)
             // selectedCell.rotate();
             // const imageEl = document.querySelector(
             //   `[model-id="${selectedCell.id}"] image`
@@ -885,7 +884,7 @@ const DashboardEditor = () => {
             if (selectedCell) {
               // selectedCell.stopAnimation();
             }
-            
+            resetElement(selectedElement)
           }
           if (typeof value === "number") {
             const range = deviceModels[cell.prop("custom/deviceModel")]
@@ -3449,10 +3448,10 @@ const DashboardEditor = () => {
                           <Slider
                             value={elementData.power}
                             onChange={(e, newValue) =>
-                            {
-                              handlePowerChange(selectedElement, newValue);
-                                 console.log("value2", value);
-                            }
+                            
+                              handlePowerChange(selectedElement, newValue)
+                            
+                           
                             }
                             min={0}
                             max={1}
