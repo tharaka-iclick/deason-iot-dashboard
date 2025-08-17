@@ -15,7 +15,23 @@ import {
   RadioGroup,
   FormControlLabel,
   Radio,
+  Stack,
+  Chip,
+  Grid,
+  Card,
+  CardContent,
+  Slider,
+  Switch,
 } from "@mui/material";
+
+import {
+  PlayArrow,
+  Stop,
+  Settings,
+  Refresh,
+  Opacity,
+  Speed,
+} from "@mui/icons-material";
 import { ChevronDown, Undo, Redo } from "lucide-react";
 import {
   Pipe01,
@@ -599,8 +615,16 @@ const HeatPumpView = joint.dia.ElementView.extend({
       );
       return null;
     }
+    const size = this.model.get("size");
+    const width = size.width;
+    const height = size.height;
+    const scaleX = width / 680;
+    const scaleY = height / 396;
+    const centerX = 423.5 * scaleX;
+    const centerY = 188.5 * scaleY;
 
-    mechanicalPathEl.style.transformOrigin = "423.5px 188.5px";
+    // Set the transform origin to the scaled center position
+    mechanicalPathEl.style.transformOrigin = `${centerX}px ${centerY}px`;
 
     const keyframes = { transform: ["rotate(0deg)", "rotate(360deg)"] };
     this.spinAnimation = mechanicalPathEl.animate(keyframes, {
@@ -764,6 +788,9 @@ const DashboardEditor = () => {
   const [payload, setPayload] = useState({});
   const [animationType, setAnimationType] = useState("pulse");
   const [animationSpeed, setAnimationSpeed] = useState(1);
+
+  const [selectedElement, setSelectedElement] = useState(null);
+  const [elements, setElements] = useState({});
 
   const handleStartAnimation = () => {
     if (!selectedCell) return;
@@ -1243,10 +1270,14 @@ const DashboardEditor = () => {
 
     paper.on("element:pointerclick", (elementView) => {
       const cell = elementView.model;
+      const element = elementView.model;
       if (inspectorInstanceRef.current) {
         inspectorInstanceRef.current.remove();
       }
       setSelectedCell(cell);
+
+      addElementToState(element);
+      setSelectedElement(element.id);
 
       const cellEUI = cell.prop("custom/deviceEUI");
       const cellDeviceID = cell.prop("custom/deviceID");
@@ -1328,21 +1359,26 @@ const DashboardEditor = () => {
       paper.removeTools();
     });
 
-    paper.on("element:mouseenter", (elementView) => {
+    paper.on("element:pointerclick", (elementView) => {
       elementView.addTools(
         new dia.ToolsView({
           tools: [
-            new joint.elementTools.Boundary({
-              padding: 10,
+            // new joint.elementTools.Boundary({
+            //   padding: 10,
+            //   useModelGeometry: true,
+            //   attributes: {
+            //     fill: "#4a7bcb",
+            //     "fill-opacity": 0.1,
+            //     stroke: "#4a7bcb",
+            //     "stroke-width": 2,
+            //     "stroke-dasharray": "none",
+            //     "pointer-events": "none",
+            //   },
+            // }),
+            new joint.elementTools.Remove({
               useModelGeometry: true,
-              attributes: {
-                fill: "#4a7bcb",
-                "fill-opacity": 0.1,
-                stroke: "#4a7bcb",
-                "stroke-width": 2,
-                "stroke-dasharray": "none",
-                "pointer-events": "none",
-              },
+              x: -10,
+              y: -10,
             }),
           ],
           layer: dia.Paper.Layers.BACK,
@@ -1350,9 +1386,9 @@ const DashboardEditor = () => {
       );
     });
 
-    paper.on("element:mouseleave", (elementView) => {
-      elementView.removeTools();
-    });
+    // paper.on("element:pointerclick", (elementView) => {
+    //   elementView.removeTools();
+    // });
 
     let currentLinkToolsView;
 
@@ -1537,7 +1573,6 @@ const DashboardEditor = () => {
       new HeatPump({
         position: { x: 10, y: 10 },
         size: { width: 100, height: 60 },
-
         cloneSize: { width: 340, height: 198 },
         ports: {
           items: [
@@ -2428,10 +2463,19 @@ const DashboardEditor = () => {
 
     const heatPump = new HeatPump({
       position: { x: 320, y: 250 },
-      power: 1,
+      power: 0,
     });
     // heatpumpRef.current = heatPump;
     graph.addCell(heatPump);
+
+    const vat = new VatWithAgitator({
+      position: { x: 320, y: 250 },
+      size: { width: 300, height: 368 },
+      waterLevel: 0.5,
+      agitatorSpeed: 0.5,
+    });
+    // vatRef.current = vat;
+    graph.addCell(vat);
 
     const svgMarkup = {
       tagName: "svg",
@@ -2846,6 +2890,239 @@ const DashboardEditor = () => {
     }
   };
 
+  const addElementToState = (element) => {
+    const defaultAttributes = {
+      isRunning: false,
+      power: 0.5,
+      waterLevel: 0.5,
+      agitatorSpeed: 0.5,
+    };
+
+    if (element instanceof HeatPump) {
+      defaultAttributes.power = 1;
+    } else if (element instanceof VatWithAgitator) {
+      defaultAttributes.waterLevel = 0.5;
+      defaultAttributes.agitatorSpeed = 0.5;
+    }
+
+    setElements((prev) => ({
+      ...prev,
+      [element.id]: {
+        ...defaultAttributes,
+        element,
+        type: element.constructor.name,
+      },
+    }));
+  };
+
+  const updateElementAttributes = (id, attributes) => {
+    console.log(
+      "[React] updateElementAttributes called for id:",
+      id,
+      "with attributes:",
+      attributes
+    );
+
+    setElements((prev) => {
+      console.log("[React] Previous state:", prev);
+      const updated = { ...prev };
+
+      if (updated[id]) {
+        console.log("[React] Found element to update:", updated[id]);
+        updated[id] = { ...updated[id], ...attributes };
+        console.log("[React] Updated element:", updated[id]);
+
+        const element = updated[id].element;
+        console.log("[React] JointJS element:", element);
+
+        if (attributes.power !== undefined) {
+          console.log("[React] Updating power to:", attributes.power);
+          element.set("power", attributes.power);
+          element.attr(
+            "rotator/fill",
+            attributes.isRunning ? "#52C54C" : "#C9C9C9"
+          );
+        }
+
+        if (attributes.isRunning !== undefined) {
+          console.log("[React] Updating isRunning to:", attributes.isRunning);
+          element.attr("isRunning", attributes.isRunning);
+          element.attr(
+            "rotator/fill",
+            attributes.isRunning ? "#52C54C" : "#C9C9C9"
+          );
+        }
+      }
+
+      return updated;
+    });
+  };
+
+  const elementData = elements[selectedElement];
+
+  const handlePowerChange = (id, newValue) => {
+    console.log(
+      "[React] handlePowerChange called for id:",
+      id,
+      "New value:",
+      newValue
+    );
+    const isRunning = newValue > 0;
+    updateElementAttributes(id, {
+      power: newValue,
+      isRunning: isRunning,
+    });
+  };
+  const toggleRunning = (id) => {
+    console.log("[React] toggleRunning called for id:", id);
+    const current = elements[id]?.isRunning || false;
+    const newPower = current ? 0 : 1;
+    console.log("[React] Current isRunning:", current, "New power:", newPower);
+
+    updateElementAttributes(id, {
+      isRunning: !current,
+      power: newPower,
+    });
+  };
+
+  const resetElement = (id) => {
+    if (elements[id]) {
+      const type = elements[id].type;
+      const defaults = {};
+
+      if (type === "HeatPump") {
+        defaults.power = 1;
+        defaults.isRunning = false;
+      } else if (type === "VatWithAgitator") {
+        defaults.waterLevel = 0.5;
+        defaults.agitatorSpeed = 0.5;
+        defaults.isRunning = false;
+      }
+
+      updateElementAttributes(id, defaults);
+    }
+  };
+
+  const renderControlPanel = () => {
+    if (!selectedElement || !elements[selectedElement]) {
+      const elementData = elements[selectedElement];
+      console.log("selectedElement", elementData);
+      return (
+        <Card elevation={3}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              No Element Selected
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Click on an element in the diagram to view and edit its
+              properties.
+            </Typography>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    const elementData = elements[selectedElement];
+
+    return (
+      <Stack spacing={2}>
+        {/* Heat Pump Control Panel */}
+
+        {/* Vat With Agitator Control Panel */}
+        {elementData.type === "VatWithAgitator" && (
+          <Card elevation={3}>
+            <CardContent>
+              <Stack direction="row" alignItems="center" spacing={1} mb={2}>
+                <Settings color="primary" />
+                <Typography variant="h6">Vat With Agitator Controls</Typography>
+              </Stack>
+
+              <Stack spacing={3}>
+                {/* Status */}
+                <Box>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={elementData.isRunning}
+                        onChange={() => toggleRunning(selectedElement)}
+                        color="primary"
+                      />
+                    }
+                    label={
+                      elementData.isRunning
+                        ? "Agitator Running"
+                        : "Agitator Stopped"
+                    }
+                  />
+                </Box>
+
+                {/* Water Level */}
+                <Box>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Opacity color="primary" />
+                    <Typography variant="subtitle2">
+                      Water Level: {Math.round(elementData.waterLevel * 100)}%
+                    </Typography>
+                  </Stack>
+                  <Slider
+                    value={elementData.waterLevel}
+                    onChange={(e, newValue) =>
+                      updateElementAttributes(selectedElement, {
+                        waterLevel: newValue,
+                      })
+                    }
+                    min={0}
+                    max={1}
+                    step={0.1}
+                    marks
+                    valueLabelDisplay="auto"
+                  />
+                </Box>
+
+                {/* Agitator Speed */}
+                <Box>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Speed color="secondary" />
+                    <Typography variant="subtitle2">
+                      Agitator Speed:{" "}
+                      {Math.round(elementData.agitatorSpeed * 100)}%
+                    </Typography>
+                  </Stack>
+                  <Slider
+                    value={elementData.agitatorSpeed}
+                    onChange={(e, newValue) =>
+                      updateElementAttributes(selectedElement, {
+                        agitatorSpeed: newValue,
+                      })
+                    }
+                    min={0}
+                    max={1}
+                    step={0.1}
+                    marks
+                    valueLabelDisplay="auto"
+                    color="secondary"
+                  />
+                </Box>
+
+                {/* Control Buttons */}
+                <Stack direction="row" spacing={2}>
+                  <Button
+                    variant="outlined"
+                    startIcon={<Refresh />}
+                    onClick={() => resetElement(selectedElement)}
+                    fullWidth
+                  >
+                    Reset to Defaults
+                  </Button>
+                </Stack>
+              </Stack>
+            </CardContent>
+          </Card>
+        )}
+      </Stack>
+    );
+  };
+
   return (
     <>
       <style>{`
@@ -3128,6 +3405,85 @@ const DashboardEditor = () => {
                     </RadioGroup>
                   </FormControl>
                 )} */}
+                {elementData.type === "HeatPump" && (
+                  <Card elevation={3}>
+                    <CardContent>
+                      <Stack
+                        direction="row"
+                        alignItems="center"
+                        spacing={1}
+                        mb={2}
+                      >
+                        <Settings color="primary" />
+                        <Typography variant="h6">Heat Pump Controls</Typography>
+                      </Stack>
+
+                      <Stack spacing={3}>
+                        {/* Power Status */}
+                        <Box>
+                          <Typography variant="subtitle2" gutterBottom>
+                            Power Status
+                          </Typography>
+                          <Chip
+                            label={
+                              elementData.isRunning ? "Running" : "Stopped"
+                            }
+                            color={
+                              elementData.isRunning ? "success" : "default"
+                            }
+                            icon={
+                              elementData.isRunning ? <PlayArrow /> : <Stop />
+                            }
+                            sx={{ width: "100%", justifyContent: "flex-start" }}
+                          />
+                        </Box>
+
+                        {/* Power Level Slider */}
+                        <Box>
+                          <Typography variant="subtitle2" gutterBottom>
+                            Power Level: {Math.round(elementData.power * 100)}%
+                          </Typography>
+                          <Slider
+                            value={elementData.power}
+                            onChange={(e, newValue) =>
+                              handlePowerChange(selectedElement, newValue)
+                            }
+                            min={0}
+                            max={1}
+                            step={0.1}
+                            marks
+                            valueLabelDisplay="auto"
+                            color="secondary"
+                          />
+                        </Box>
+
+                        {/* Control Buttons */}
+                        <Stack direction="row" spacing={2}>
+                          <Button
+                            variant="contained"
+                            color={elementData.isRunning ? "error" : "success"}
+                            startIcon={
+                              elementData.isRunning ? <Stop /> : <PlayArrow />
+                            }
+                            onClick={() => toggleRunning(selectedElement)}
+                            fullWidth
+                          >
+                            {elementData.isRunning ? "Stop" : "Start"}
+                          </Button>
+
+                          <Button
+                            variant="outlined"
+                            startIcon={<Refresh />}
+                            onClick={() => resetElement(selectedElement)}
+                            fullWidth
+                          >
+                            Reset
+                          </Button>
+                        </Stack>
+                      </Stack>
+                    </CardContent>
+                  </Card>
+                )}
 
                 <Box className="animation-controls">
                   <Typography variant="subtitle2">
@@ -3168,10 +3524,10 @@ const DashboardEditor = () => {
                     {animationSpeed.toFixed(1)}x
                   </Typography>
 
-                  {/* <Box sx={{ display: "flex", gap: 1, mt: 2 }}>
+                  <Box sx={{ display: "flex", gap: 1, mt: 2 }}>
                     <Button
                       variant="contained"
-                      onClick={handleStartAnimation}
+                      // onClick={handleStartAnimation}
                       fullWidth
                       size="small"
                     >
@@ -3179,13 +3535,13 @@ const DashboardEditor = () => {
                     </Button>
                     <Button
                       variant="outlined"
-                      onClick={handleStopAnimation}
+                      // onClick={handleStopAnimation}
                       fullWidth
                       size="small"
                     >
                       Stop
                     </Button>
-                  </Box> */}
+                  </Box>
                 </Box>
 
                 <Box
