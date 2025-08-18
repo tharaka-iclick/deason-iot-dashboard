@@ -1276,7 +1276,10 @@ const DashboardEditor = () => {
       }
       setSelectedCell(cell);
 
-      addElementToState(element);
+      if (!elements[element.id]) {
+        addElementToState(element);
+      }
+
       setSelectedElement(element.id);
 
       const cellEUI = cell.prop("custom/deviceEUI");
@@ -2891,18 +2894,21 @@ const DashboardEditor = () => {
   };
 
   const addElementToState = (element) => {
+    if (elements[element.id]) {
+      return;
+    }
     const defaultAttributes = {
       isRunning: false,
       power: 0.5,
       waterLevel: 0.5,
-      agitatorSpeed: 0.5,
+      agitatorSpeed: 0.2,
     };
 
     if (element instanceof HeatPump) {
       defaultAttributes.power = 1;
     } else if (element instanceof VatWithAgitator) {
       defaultAttributes.waterLevel = 0.5;
-      defaultAttributes.agitatorSpeed = 0.5;
+      defaultAttributes.agitatorSpeed = 0.2;
     }
 
     setElements((prev) => ({
@@ -2916,6 +2922,9 @@ const DashboardEditor = () => {
   };
 
   const updateElementAttributes = (id, attributes) => {
+    console.log(
+      `Water Level: ${attributes.waterLevel}, Agitator Speed: ${attributes.agitatorSpeed}`
+    );
     console.log(
       "[React] updateElementAttributes called for id:",
       id,
@@ -2935,12 +2944,12 @@ const DashboardEditor = () => {
         const element = updated[id].element;
         console.log("[React] JointJS element:", element);
 
-        if (attributes.power !== undefined) {
+        if (attributes.isRunning !== undefined) {
           console.log("[React] Updating power to:", attributes.power);
           element.set("power", attributes.power);
           element.attr(
             "rotator/fill",
-            attributes.isRunning ? "#52C54C" : "#C9C9C9"
+            attributes.power ? "#52C54C" : "#C9C9C9"
           );
         }
 
@@ -2950,6 +2959,54 @@ const DashboardEditor = () => {
           element.attr(
             "rotator/fill",
             attributes.isRunning ? "#52C54C" : "#C9C9C9"
+          );
+        }
+
+        if (attributes.waterLevel !== undefined) {
+          console.log("[React] Updating waterLevel:", attributes.waterLevel);
+          element.set("waterLevel", attributes.waterLevel);
+
+          // Trigger visual update
+          element.prop("updateWaterLevel");
+
+          // Alternatively update attributes directly:
+          element.attr({
+            "waterLevelFill/height": 100 * attributes.waterLevel,
+            "waterLevelFill/y": 216 + (509 - 100 * attributes.waterLevel),
+            "waterLevelFill/fill": `rgba(100, 150, ${Math.floor(
+              100 + 155 * attributes.waterLevel
+            )}, ${0.4 + 0.4 * attributes.waterLevel})`,
+            "waterLevelDisplayText/text": `Water Level: ${Math.round(
+              attributes.waterLevel * 100
+            )}%`,
+          });
+        }
+
+        if (attributes.waterLevel || attributes.agitatorSpeed !== undefined) {
+          console.log(
+            "[React] Updating power to agitatorSpeed:",
+            attributes.agitatorSpeed
+          );
+          element.set("agitatorSpeed", attributes.agitatorSpeed);
+
+          element.attr(
+            "rudderFan/fill",
+            attributes.agitatorSpeed > 0
+              ? {
+                  type: "linearGradient",
+                  stops: [
+                    { offset: "0%", color: "#078C00" },
+                    { offset: "100%", color: "#C7FFC4" },
+                  ],
+                }
+              : {
+                  type: "linearGradient",
+                  stops: [
+                    { offset: "0%", color: "#737373" },
+                    { offset: "100%", color: "#D9D9D9" },
+                  ],
+                  attrs: { x1: "50%", y1: "0%", x2: "50%", y2: "100%" },
+                }
           );
         }
       }
@@ -3004,24 +3061,6 @@ const DashboardEditor = () => {
   };
 
   const renderControlPanel = () => {
-    if (!selectedElement || !elements[selectedElement]) {
-      const elementData = elements[selectedElement];
-      console.log("selectedElement", elementData);
-      return (
-        <Card elevation={3}>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              No Element Selected
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Click on an element in the diagram to view and edit its
-              properties.
-            </Typography>
-          </CardContent>
-        </Card>
-      );
-    }
-
     const elementData = elements[selectedElement];
 
     return (
@@ -3092,6 +3131,7 @@ const DashboardEditor = () => {
                     value={elementData.agitatorSpeed}
                     onChange={(e, newValue) =>
                       updateElementAttributes(selectedElement, {
+                        ...elementData,
                         agitatorSpeed: newValue,
                       })
                     }
@@ -3478,6 +3518,115 @@ const DashboardEditor = () => {
                             fullWidth
                           >
                             Reset
+                          </Button>
+                        </Stack>
+                      </Stack>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {elementData.type === "VatWithAgitator" && (
+                  <Card elevation={3}>
+                    <CardContent>
+                      <Stack
+                        direction="row"
+                        alignItems="center"
+                        spacing={1}
+                        mb={2}
+                      >
+                        <Settings color="primary" />
+                        <Typography variant="h6">
+                          Vat With Agitator Controls
+                        </Typography>
+                      </Stack>
+
+                      <Stack spacing={3}>
+                        {/* Status */}
+                        <Box>
+                          <FormControlLabel
+                            control={
+                              <Switch
+                                checked={elementData.isRunning}
+                                onChange={() => toggleRunning(selectedElement)}
+                                color="primary"
+                              />
+                            }
+                            label={
+                              elementData.isRunning
+                                ? "Agitator Running"
+                                : "Agitator Stopped"
+                            }
+                          />
+                        </Box>
+
+                        {/* Water Level */}
+                        <Box>
+                          <Stack
+                            direction="row"
+                            spacing={1}
+                            alignItems="center"
+                          >
+                            <Opacity color="primary" />
+                            <Typography variant="subtitle2">
+                              Water Level:{" "}
+                              {Math.round(elementData.waterLevel * 100)}%
+                            </Typography>
+                          </Stack>
+                          <Slider
+                            value={elementData.waterLevel}
+                            onChange={(e, newValue) =>
+                              updateElementAttributes(selectedElement, {
+                                ...elementData,
+                                waterLevel: newValue,
+                              })
+                            }
+                            min={0}
+                            max={1}
+                            step={0.1}
+                            marks
+                            valueLabelDisplay="auto"
+                          />
+                        </Box>
+
+                        {/* Agitator Speed */}
+                        <Box>
+                          <Stack
+                            direction="row"
+                            spacing={1}
+                            alignItems="center"
+                          >
+                            <Speed color="secondary" />
+                            <Typography variant="subtitle2">
+                              Agitator Speed:{" "}
+                              {Math.round(elementData.agitatorSpeed * 100)}%
+                            </Typography>
+                          </Stack>
+                          <Slider
+                            value={elementData.agitatorSpeed}
+                            onChange={(e, newValue) =>
+                              updateElementAttributes(selectedElement, {
+                                ...elementData,
+                                agitatorSpeed: newValue,
+                              })
+                            }
+                            min={0}
+                            max={1}
+                            step={0.1}
+                            marks
+                            valueLabelDisplay="auto"
+                            color="secondary"
+                          />
+                        </Box>
+
+                        {/* Control Buttons */}
+                        <Stack direction="row" spacing={2}>
+                          <Button
+                            variant="outlined"
+                            startIcon={<Refresh />}
+                            onClick={() => resetElement(selectedElement)}
+                            fullWidth
+                          >
+                            Reset to Defaults
                           </Button>
                         </Stack>
                       </Stack>

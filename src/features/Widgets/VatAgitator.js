@@ -6,7 +6,7 @@ class VatWithAgitator extends joint.dia.Element {
       ...super.defaults,
       type: "VatWithAgitator",
       size: { width: 617, height: 761 },
-      waterLevel: 0.5, // 0 to 1 (0% to 100%)
+      waterLevel: 0.2, // 0 to 1 (0% to 100%)
       agitatorSpeed: 0, // 0 to 1 (0% to 100% speed)
       ports: {
         groups: {
@@ -189,8 +189,6 @@ class VatWithAgitator extends joint.dia.Element {
           strokeWidth: 4,
           fill: "none",
         },
-
-        // Vat Body - Square Body
         squareBody: {
           d: "M615 179H2V759H615V179Z",
           fill: {
@@ -207,17 +205,15 @@ class VatWithAgitator extends joint.dia.Element {
           stroke: "#737373",
           strokeWidth: 4,
         },
-
-        // Water level visualization - should be above squareBody but below other elements
         waterLevelFill: {
           x: 37,
-          y: 216 + (509 - 100),
+          y: 216 + 509,
           width: 168,
-          height: 100,
+          height: 0,
           rx: 13,
+          fill: "#3498db",
+          refY: 1,
         },
-
-        // Other elements (transDisplay, rudderPole etc.) will be on top
         transDisplay: {
           x: 37,
           y: 216,
@@ -228,8 +224,6 @@ class VatWithAgitator extends joint.dia.Element {
           stroke: "#737373",
           strokeWidth: 4,
         },
-
-        // Rudder - Pole
         rudderPole: {
           x: 113,
           y: 218,
@@ -655,19 +649,15 @@ const VatWithAgitatorView = joint.dia.ElementView.extend({
     console.log("waterLevel", waterLevel);
 
     if (waterFill) {
-      // Display dimensions
-      const displayY = 216; // top of the transDisplay
-      const displayHeight = 509; // full height of transDisplay
+      const displayY = 216;
+      const displayHeight = 509;
 
-      // Calculate water fill height and Y position for bottom-to-top fill
       const newHeight = displayHeight * waterLevel;
-      const newY = displayY + (displayHeight - newHeight); // shift up from bottom
+      const newY = displayY + (displayHeight - newHeight);
 
-      // Color/opacity settings
-      const blueIntensity = Math.floor(100 + 155 * waterLevel); // 100-255 range
-      const opacity = 0.4 + 0.4 * waterLevel; // 0.4-0.8 range
+      const blueIntensity = Math.floor(100 + 155 * waterLevel);
+      const opacity = 0.4 + 0.4 * waterLevel;
 
-      // Update attributes
       waterFill.setAttribute("height", newHeight);
       waterFill.setAttribute("y", newY);
       waterFill.setAttribute(
