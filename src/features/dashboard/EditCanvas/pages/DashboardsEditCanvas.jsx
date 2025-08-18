@@ -961,22 +961,26 @@ const setInspectorContainer = (newValue) => {
               cell.attr("label/text", "Error: Invalid Value");
             }
 
-            // Handle tank level updates
+      
             if (typeof value === "number"&&selectedValue== "level") {
               // Scale the tank height based on the value
              const tankPercentage = (value / 100) * 100; // Assuming value is 0-100
              // cell.scaleHeight(tankPercentage);
-              const scaleValue = 0.2 + (value / 100) * 0.8;
+              const scaleValue = (0.2 + (value / 100) * 0.8);
              // Update both height and CSS scale
-             cell.setScale(scaleValue);
-             // Add animation effect
-             cell.attr("image/data-animated", true);
-             cell.attr("image/class", "height-scale");
+              updateElementAttributes(selectedElement, {
+                        waterLevel: scaleValue,
+                      })
+          
+            //  cell.setScale(scaleValue);
+            //  // Add animation effect
+            //  cell.attr("image/data-animated", true);
+            //  cell.attr("image/class", "height-scale");
 
-             // Update color based on level
-             const normalizedValue = Math.min(Math.max(value / 100, 0), 1);
-             const hue = (1 - normalizedValue) * 120;
-             cell.attr("body/fill", `hsl(${hue}, 100%, 80%)`);
+            //  // Update color based on level
+            //  const normalizedValue = Math.min(Math.max(value / 100, 0), 1);
+            //  const hue = (1 - normalizedValue) * 120;
+            //  cell.attr("body/fill", `hsl(${hue}, 100%, 80%)`);
             }
          else   if (value == "open") {
 
@@ -991,6 +995,7 @@ const setInspectorContainer = (newValue) => {
              } 
              
                  else   if (selectedValue== "running_status"&& value == "on") {
+                   turnOn(selectedElement);
     selectedCell.tankVolumeUpAnimation();
     const imageEl = document.querySelector(
                  `[model-id="${selectedCell.id}"] image`
@@ -1000,17 +1005,25 @@ const setInspectorContainer = (newValue) => {
                }
                  }
                                   else   if (selectedValue== "agi_mixer"&& value == "on") {
-    selectedCell.startAnimation("rotate3d");
-    const imageEl = document.querySelector(
-                 `[model-id="${selectedCell.id}"] image`
-               );
-               if (imageEl) {
-                 imageEl.style.animationDuration = `${2 / animationSpeed}s`;
-               }
+                                                  updateElementAttributes(selectedElement, {
+                        ...elementData,
+                        agitatorSpeed: 100,
+                      });
+    // selectedCell.startAnimation("rotate3d");
+    // const imageEl = document.querySelector(
+    //              `[model-id="${selectedCell.id}"] image`
+    //            );
+    //            if (imageEl) {
+    //              imageEl.style.animationDuration = `${2 / animationSpeed}s`;
+    //            }
                  }
            else {
              try {          
                      turnOff(selectedElement);
+                                     updateElementAttributes(selectedElement, {
+                        ...elementData,
+                        agitatorSpeed: 0,
+                      });
                if (selectedCell) {
                  selectedCell.stopAnimation();
                }
