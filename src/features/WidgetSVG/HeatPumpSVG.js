@@ -55,7 +55,6 @@ const HeatPumpSVG = `<?xml version="1.0" ?>
 </radialGradient>
 </defs>
 </svg>
-
 `;
 
 export default HeatPumpSVG;
