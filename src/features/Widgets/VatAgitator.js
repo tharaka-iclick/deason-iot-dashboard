@@ -205,13 +205,13 @@ class VatWithAgitator extends joint.dia.Element {
           stroke: "#737373",
           strokeWidth: 4,
         },
+        waterDisplayGroup: {
+          position: "reletive",
+        },
         waterLevelFill: {
           x: 37,
-          y: 216 + 509,
           width: 168,
-          height: 0,
           rx: 13,
-          fill: "#3498db",
           refY: 1,
         },
         transDisplay: {
