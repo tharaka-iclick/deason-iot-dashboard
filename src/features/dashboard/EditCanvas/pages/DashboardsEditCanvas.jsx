@@ -46,6 +46,12 @@ import VatAgitator from "../../../WidgetSVG/VatAgitator";
 import Chille from "../../../WidgetSVG/Chiller";
 // import IceBank from "../../../WidgetSVG/IceBank";
 import ACFan from "../../../WidgetSVG/ACFan";
+import VatAgitatorMixser from "../../../WidgetSVG/VatAgitatorMixser";
+import VatAgitatorLevel from "../../../WidgetSVG/VatAgitatorLevel";
+
+
+
+
 
 import CoolingPlate from "../../../Widgets/CoolingPlate";
 import MotorPump from "../../../Widgets/MotorPump";
@@ -683,7 +689,14 @@ class TemplateImage extends joint.dia.Element {
       },
     };
   }
-
+  tankVolumeUpAnimation() {
+    // Animate the image height from 60% to 100% and back
+    this.stopAnimation(); // Stop any previous animation
+    this.attr("image/data-animated", true);
+    this.attr("image/class", "tank-volume-up");
+    
+    return this;
+  }
   preinitialize() {
     this.dataURLPrefix = "data:image/svg+xml;utf8,";
     this.markup = [
@@ -757,6 +770,39 @@ class TemplateImage extends joint.dia.Element {
 
     return this;
   }
+
+  scaleHeight(percentage) {
+    const originalHeight = this.get('originalHeight') || this.size().height;
+    if (!this.get('originalHeight')) {
+      this.set('originalHeight', originalHeight);
+    }
+    const newHeight = (originalHeight * percentage) / 100;
+    const currentPos = this.position();
+    const currentHeight = this.size().height;
+    const currentWidth = this.size().width;
+    
+    // Calculate new Y position to maintain bottom anchor point
+    const newY = currentPos.y + (currentHeight - newHeight);
+    
+    // Keep the same width, only change height
+    this.resize(currentWidth, newHeight);
+    this.position(currentPos.x, newY);
+    return this;
+  }
+
+  heightAnimation() {
+    // Add a custom CSS property for the scale value
+    document.documentElement.style.setProperty('--scale-height', this.get('scaleY') || '0.2');
+    this.attr("image/data-animated", true);
+    this.attr("image/class", "height-scale");
+    return this;
+  }
+
+  setScale(value) {
+    this.set('scaleY', value);
+    document.documentElement.style.setProperty('--scale-height', value);
+    return this;
+  }
 }
 
 const DashboardEditor = () => {
@@ -792,6 +838,10 @@ const DashboardEditor = () => {
   const [selectedElement, setSelectedElement] = useState(null);
   const [elements, setElements] = useState({});
 
+  const [heightScale, setHeightScale] = useState(100); // Add this state
+const setInspectorContainer = (newValue) => {
+  inspectorContainerRef.current = newValue;
+};
   const handleStartAnimation = () => {
     if (!selectedCell) return;
 
@@ -804,6 +854,13 @@ const DashboardEditor = () => {
         break;
       case "flow":
         selectedCell.flowAnimation();
+        break;
+              case 'tank-volume-up':
+        selectedCell.tankVolumeUpAnimation();
+        break;
+      case 'height-scale':
+        selectedCell.heightAnimation();
+        selectedCell.scaleHeight(heightScale);
         break;
       default:
         selectedCell.startAnimation(animationType);
@@ -831,8 +888,23 @@ const DashboardEditor = () => {
   };
 
   const handleStopAnimation = () => {
-    if (selectedCell) {
+    try {
+      if (!selectedCell) {
+        console.warn("No cell selected to stop animation");
+        return;
+      }
       selectedCell.stopAnimation();
+    } catch (error) {
+      console.error("Error stopping animation:", error);
+      // Attempt recovery by resetting animation states
+      try {
+        if (selectedCell) {
+          selectedCell.attr("image/data-animated", false);
+          selectedCell.attr("image/class", "");
+        }
+      } catch (recoveryError) {
+        console.error("Failed to recover from animation error:", recoveryError);
+      }
     }
   };
 
@@ -855,7 +927,6 @@ const DashboardEditor = () => {
     if (!cell || !data) return;
 
     const payload = data || {};
-    // const value = payload[selectedValue];
 
     console.log("payload01", data);
     console.log("asas selectedEUI", selectedEUI);
@@ -866,44 +937,117 @@ const DashboardEditor = () => {
       selectedDevice,
       selectedValue,
       (value) => {
-        if (typeof value !== "undefined") {
-          const modelName = selectedValue || "Device";
-          cell.attr("label/text", `${modelName}: ${value}`);
-          console.log("value2", value);
-
-          if (value == "open") {
-                toggleRunning(selectedElement)
-            // selectedCell.rotate();
-            // const imageEl = document.querySelector(
-            //   `[model-id="${selectedCell.id}"] image`
-            // );
-            // if (imageEl) {
-            //   imageEl.style.animationDuration = `${2 / animationSpeed}s`;
-            // }
-          } else {
-            if (selectedCell) {
-              // selectedCell.stopAnimation();
+        try {
+          if (typeof value !== "undefined") {
+            let displayText;
+            try {
+              const modelName = formatKey(selectedValue) || "Device";
+              if (typeof value === "number") {
+                // Format numbers with 2 decimal places
+                displayText = `${modelName}: ${value.toFixed(2)}`;
+              } else if (typeof value === "boolean") {
+                // Convert boolean to "On"/"Off"
+                displayText = `${modelName}: ${value ? "On" : "Off"}`;
+              } else if (value === null || value === "") {
+                // Handle null or empty values
+                displayText = `${modelName}: N/A`;
+              } else {
+                // Default case for strings and other types
+                displayText = `${modelName}: ${value}`;
+              }
+              cell.attr("label/text", displayText);
+            } catch (labelError) {
+              console.error("Error formatting label:", labelError);
+              cell.attr("label/text", "Error: Invalid Value");
             }
-            resetElement(selectedElement)
-          }
-          if (typeof value === "number") {
-            const range = deviceModels[cell.prop("custom/deviceModel")]
-              ?.range || [0, 100];
-            const normalizedValue = Math.min(
-              Math.max((value - range[0]) / (range[1] - range[0]), 0),
-              1
-            );
-            console.log("normalizedValue", normalizedValue);
-            const hue = (1 - normalizedValue) * 120; // Green (0) to Red (120)
-            cell.attr("body/fill", `hsl(${hue}, 100%, 80%)`);
-          } else {
-            cell.attr("body/fill", "#e0e0e0");
-          }
-        }
-      }
-    );
 
-    unsubscribe();
+            // Handle tank level updates
+            if (typeof value === "number"&&selectedValue== "level") {
+              // Scale the tank height based on the value
+             const tankPercentage = (value / 100) * 100; // Assuming value is 0-100
+             // cell.scaleHeight(tankPercentage);
+              const scaleValue = 0.2 + (value / 100) * 0.8;
+             // Update both height and CSS scale
+             cell.setScale(scaleValue);
+             // Add animation effect
+             cell.attr("image/data-animated", true);
+             cell.attr("image/class", "height-scale");
+
+             // Update color based on level
+             const normalizedValue = Math.min(Math.max(value / 100, 0), 1);
+             const hue = (1 - normalizedValue) * 120;
+             cell.attr("body/fill", `hsl(${hue}, 100%, 80%)`);
+            }
+         else   if (value == "open") {
+
+             toggleRunning(selectedElement)
+               selectedCell.rotate();
+               const imageEl = document.querySelector(
+                 `[model-id="${selectedCell.id}"] image`
+               );
+               if (imageEl) {
+                 imageEl.style.animationDuration = `${2 / animationSpeed}s`;
+               }
+             } 
+             
+                 else   if (selectedValue== "running_status"&& value == "on") {
+    selectedCell.tankVolumeUpAnimation();
+    const imageEl = document.querySelector(
+                 `[model-id="${selectedCell.id}"] image`
+               );
+               if (imageEl) {
+                 imageEl.style.animationDuration = `${2 / animationSpeed}s`;
+               }
+                 }
+                                  else   if (selectedValue== "agi_mixer"&& value == "on") {
+    selectedCell.startAnimation("rotate3d");
+    const imageEl = document.querySelector(
+                 `[model-id="${selectedCell.id}"] image`
+               );
+               if (imageEl) {
+                 imageEl.style.animationDuration = `${2 / animationSpeed}s`;
+               }
+                 }
+           else {
+             try {            resetElement(selectedElement)
+               if (selectedCell) {
+                 selectedCell.stopAnimation();
+               }
+             } catch (error) {
+               console.error("Error stopping cell animation:", error);
+               // Attempt to reset animation state
+               try {
+                 if (selectedCell) {
+                   selectedCell.attr("image/data-animated", false);
+                   selectedCell.attr("image/class", "");
+                 }
+               } catch (recoveryError) {
+                 console.error("Failed to reset animation state:", recoveryError);
+               }
+             }
+           }
+           if (typeof value === "number") {
+             const range = deviceModels[cell.prop("custom/deviceModel")]
+               ?.range || [0, 100];
+             const normalizedValue = Math.min(
+               Math.max((value - range[0]) / (range[1] - range[0]), 0),
+               1
+             );
+             console.log("normalizedValue", normalizedValue);
+             const hue = (1 - normalizedValue) * 120; // Green (0) to Red (120)
+             cell.attr("body/fill", `hsl(${hue}, 100%, 80%)`);
+           } else {
+             cell.attr("body/fill", "#e0e0e0");
+           }
+         }
+       } catch (error) {
+         console.error("Error updating cell display:", error);
+         cell.attr("label/text", "Error: Update Failed");
+       }
+    }
+  );
+
+  unsubscribe();
   };
   const subscribeCellToDevice = (cell, eui, deviceId, deviceModel) => {
     const cellId = getCellId(cell);
@@ -1341,13 +1485,14 @@ const DashboardEditor = () => {
             device: { label: "Device Settings", index: 4 },
             actions: { label: "Actions", index: 5 },
           },
-          groupState: {
-            text: { open: true },
-            appearance: { open: true },
-            size: { open: true },
-            device: { open: true },
-            actions: { open: true },
-          },
+          groupState:
+            {
+              text: { open: true },
+              appearance: { open: true },
+              size: { open: true },
+              device: { open: true },
+              actions: { open: true },
+            },
         }
       );
     });
@@ -1734,8 +1879,24 @@ const DashboardEditor = () => {
         size: { width: 80, height: 60 },
         cloneSize: { width: 250, height: 200 },
         attrs: {},
+      }
+      ,
+      {
+        type: "custom.TemplateImage",
+        svg: VatAgitatorMixser,
+        size: { width: 80, height: 60 },
+        cloneSize: {  width: 80, height: 120},
+        attrs: {},
+      },
+      {
+        type: "custom.TemplateImage",
+        svg: VatAgitatorLevel,
+        size: { width: 80, height: 60 },
+        cloneSize: {  width: 80, height: 120},
+        attrs: {},
       },
     ];
+    
 
     const stencilPorts = [
       {
@@ -3125,11 +3286,20 @@ const DashboardEditor = () => {
     );
   };
 
+  const handleHeightChange = (event) => {
+    const height = parseFloat(event.target.value);
+    setHeightScale(height);
+    if (selectedCell) {
+      selectedCell.scaleHeight(height);
+    }
+  };
+
   return (
     <>
       <style>{`
         @keyframes pulse {
           0% { opacity: 0.7; transform: scale(0.95); }
+         
           50% { opacity: 1; transform: scale(1.05); }
           100% { opacity: 0.7; transform: scale(0.95); }
         }
@@ -3138,13 +3308,32 @@ const DashboardEditor = () => {
     from { transform: rotate(0deg) }
     to { transform: rotate(360deg)}
   }
+
+  @keyframes rotate3d {
+    from { transform: rotateY(0deg); }
+    to { transform: rotateY(360deg); }
+  }
   
 [data-animated="true"].rotate {
   animation: spin 2s linear infinite;
   transform-origin: center;
-  transform-box: fill-box; /* Ensures rotation around visual center */
+  transform-box: fill-box;
 }
-        
+
+[data-animated="true"].rotate3d {
+  animation: rotate3d 2s linear infinite;
+  transform-origin: center;
+  transform-style: preserve-3d;
+  perspective: 1000px;
+}
+             @keyframes tankVolumeUp {
+          0% { filter: brightness(1) drop-shadow(0 0 0 #00bcd4); }
+          50% { filter: brightness(1.2) drop-shadow(0 0 10px #00bcd4); }
+          100% { filter: brightness(1) drop-shadow(0 0 0 #00bcd4); }
+        }
+        [data-animated="true"].tank-volume-up {
+          animation: tankVolumeUp 2s infinite;
+        }   
         @keyframes bounce {
           0%, 100% { transform: translateY(0); }
           50% { transform: translateY(-10px); }
@@ -3158,8 +3347,26 @@ const DashboardEditor = () => {
           animation: rotate 4s linear infinite;
         }
         
+        [data-animated="true"].rotate3d {
+          animation: rotate3d 4s linear infinite;
+            transform-origin: center;
+  transform-box: fill-box;
+        }
+        
         [data-animated="true"].bounce {
           animation: bounce 1s ease infinite;
+        }
+        
+        @keyframes height-scale {
+          0% { transform: scaleY(var(--scale-height, 0.2)); }
+          50% { transform: scaleY(var(--scale-height, 0.2)); }
+          100% { transform: scaleY(var(--scale-height, 0.2)); }
+        }
+        
+        [data-animated="true"].height-scale {
+          animation: height-scale 2s ease-in-out infinite;
+          transform-origin: bottom;
+          transform-box: fill-box;
         }
         
         .animation-controls {
@@ -3389,6 +3596,39 @@ const DashboardEditor = () => {
                     </Select>
                   </FormControl>
                 )}
+
+      <FormControl fullWidth sx={{ mb: 2, mt: 1 }}>
+        <InputLabel>Animation Type</InputLabel>
+        <Select
+          value={animationType}
+          onChange={handleAnimationTypeChange}
+          label="Animation Type"
+        >
+          <MenuItem value="pulse">Pulse</MenuItem>
+          <MenuItem value="rotate">Rotate</MenuItem>
+          <MenuItem value="rotate3d">Rotate 3D</MenuItem>
+          <MenuItem value="bounce">Bounce</MenuItem>
+          <MenuItem value="flow">Flow</MenuItem>
+          <MenuItem value="tank-volume-up">Tank Volume Up</MenuItem>
+          <MenuItem value="height-scale">Height Scale</MenuItem>
+        </Select>
+      </FormControl>
+
+      {animationType === 'height-scale' && (
+        <Box sx={{ mt: 2 }}>
+          <Typography variant="body2">Height Scale (%)</Typography>
+          <Slider
+            value={heightScale}
+            onChange={handleHeightChange}
+            min={0}
+            max={100}
+            step={1}
+            valueLabelDisplay="auto"
+            sx={{ mt: 1 }}
+          />
+        </Box>
+      )}
+
                 {/* {selectedDevice && Object.keys(payload).length > 0 && (
                   <FormControl component="fieldset">
                     <Typography variant="subtitle2">Display Value:</Typography>
@@ -3504,6 +3744,7 @@ const DashboardEditor = () => {
                     >
                       <MenuItem value="pulse">Pulse</MenuItem>
                       <MenuItem value="rotate">Rotate</MenuItem>
+                      <MenuItem value="rotate3d">Rotate 3D</MenuItem>
                       <MenuItem value="bounce">Bounce</MenuItem>
                       <MenuItem value="flow">Flow</MenuItem>
                     </Select>
