@@ -980,14 +980,14 @@ const setInspectorContainer = (newValue) => {
             }
          else   if (value == "open") {
 
-             toggleRunning(selectedElement)
-               selectedCell.rotate();
-               const imageEl = document.querySelector(
-                 `[model-id="${selectedCell.id}"] image`
-               );
-               if (imageEl) {
-                 imageEl.style.animationDuration = `${2 / animationSpeed}s`;
-               }
+             turnOn(selectedElement);
+              //  selectedCell.rotate();
+              //  const imageEl = document.querySelector(
+              //    `[model-id="${selectedCell.id}"] image`
+              //  );
+              //  if (imageEl) {
+              //    imageEl.style.animationDuration = `${2 / animationSpeed}s`;
+              //  }
              } 
              
                  else   if (selectedValue== "running_status"&& value == "on") {
@@ -1009,7 +1009,8 @@ const setInspectorContainer = (newValue) => {
                }
                  }
            else {
-             try {            resetElement(selectedElement)
+             try {          
+                     turnOff(selectedElement);
                if (selectedCell) {
                  selectedCell.stopAnimation();
                }
@@ -3204,6 +3205,22 @@ const setInspectorContainer = (newValue) => {
       power: newPower,
     });
   };
+
+const turnOn = (id) => {
+    console.log("[React] turnOn called for id:", id);
+    updateElementAttributes(id, {
+        isRunning: true,
+        power: 1,
+    });
+};
+
+const turnOff = (id) => {
+    console.log("[React] turnOff called for id:", id);
+    updateElementAttributes(id, {
+        isRunning: false,
+        power: 0,
+    });
+};
 
   const resetElement = (id) => {
     if (elements[id]) {
