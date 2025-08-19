@@ -838,6 +838,7 @@ const DashboardEditor = () => {
   const [elements, setElements] = useState({});
 
   const [heightScale, setHeightScale] = useState(100); // Add this state
+
   const setInspectorContainer = (newValue) => {
     inspectorContainerRef.current = newValue;
   };
@@ -950,7 +951,7 @@ const DashboardEditor = () => {
               const modelName = formatKey(selectedValue) || "Device";
               if (typeof value === "number") {
                 // Format numbers with 2 decimal places
-                displayText = `${modelName}: ${value.toFixed(2)}`;
+                displayText = `${modelName}: ${value}`;
               } else if (typeof value === "boolean") {
                 // Convert boolean to "On"/"Off"
                 displayText = `${modelName}: ${value ? "On" : "Off"}`;
@@ -964,7 +965,7 @@ const DashboardEditor = () => {
               cell.attr("label/text", displayText);
             } catch (labelError) {
               console.error("Error formatting label:", labelError);
-              cell.attr("label/text", "Error: Invalid Value");
+              // cell.attr("label/text", "Error: Invalid Value");
             }
 
             if (typeof value === "number" && selectedValue == "level") {
@@ -986,6 +987,11 @@ const DashboardEditor = () => {
               //  const normalizedValue = Math.min(Math.max(value / 100, 0), 1);
               //  const hue = (1 - normalizedValue) * 120;
               //  cell.attr("body/fill", `hsl(${hue}, 100%, 80%)`);
+            } else if (selectedValue == "magnet_status") {
+              const isOpen = value === "open";
+              updateElementAttributes(selectedElement, {
+                magnet_status: value,
+              });
             } else if (value == "open") {
               turnOn(selectedElement);
               //  selectedCell.rotate();
@@ -1053,7 +1059,7 @@ const DashboardEditor = () => {
               const hue = (1 - normalizedValue) * 120; // Green (0) to Red (120)
               cell.attr("body/fill", `hsl(${hue}, 100%, 80%)`);
             } else {
-              cell.attr("body/fill", "#e0e0e0");
+              cell.attr("body/fill", "none");
             }
           }
         } catch (error) {
@@ -1065,6 +1071,7 @@ const DashboardEditor = () => {
 
     unsubscribe();
   };
+
   const subscribeCellToDevice = (cell, eui, deviceId, deviceModel) => {
     const cellId = getCellId(cell);
 
@@ -1083,6 +1090,8 @@ const DashboardEditor = () => {
             setPayload(data);
 
             const payloadKeys = Object.keys(data || {});
+            const selectedValue = payloadKeys;
+
             if (payloadKeys.length > 0) {
               setAvailableValues(payloadKeys);
               console.log("payloadKeys", payloadKeys);
@@ -3119,9 +3128,10 @@ const DashboardEditor = () => {
     }
     const defaultAttributes = {
       isRunning: false,
-      power: 0.5,
+      power: 1,
       waterLevel: 0.5,
       agitatorSpeed: 0.2,
+      magnet_status: "open",
     };
 
     if (element instanceof HeatPump) {
@@ -3129,6 +3139,8 @@ const DashboardEditor = () => {
     } else if (element instanceof VatWithAgitator) {
       defaultAttributes.waterLevel = 0.5;
       defaultAttributes.agitatorSpeed = 0.2;
+    } else if (element instanceof MotorPump) {
+      defaultAttributes.magnet_status = "open";
     }
 
     setElements((prev) => ({
@@ -3140,7 +3152,6 @@ const DashboardEditor = () => {
       },
     }));
   };
-
   const updateElementAttributes = (id, attributes) => {
     console.log(
       `Water Level: ${attributes.waterLevel}, Agitator Speed: ${attributes.agitatorSpeed}`
@@ -3229,6 +3240,86 @@ const DashboardEditor = () => {
                 }
           );
         }
+
+        if (attributes.magnet_status !== undefined) {
+          console.log(
+            "[React] Updating magnet_status to:",
+            attributes.magnet_status
+          );
+          element.set("magnet_status", attributes.magnet_status);
+          const isOpen = attributes.magnet_status === "open";
+          console.log("[React] Updating magnet_status isOpen:", isOpen);
+
+          // Define color schemes
+          const openColors = {
+            mainBody: {
+              type: "linearGradient",
+              stops: [
+                { offset: "0%", color: "#078C00" },
+                { offset: "100%", color: "#C7FFC4" },
+              ],
+            },
+            panel: {
+              type: "linearGradient",
+              stops: [
+                { offset: "15.3846%", color: "#C7FFC4" },
+                { offset: "100%", color: "#078C00" },
+              ],
+              attrs: { x1: "50%", y1: "100%", x2: "50%", y2: "0%" },
+            },
+          };
+
+          const closedColors = {
+            mainBody: {
+              type: "linearGradient",
+              stops: [
+                { offset: "0%", color: "#737373" },
+                { offset: "100%", color: "#D9D9D9" },
+              ],
+              attrs: { x1: "100%", y1: "50%", x2: "0%", y2: "50%" },
+            },
+            panel: {
+              type: "linearGradient",
+              stops: [
+                { offset: "15.3846%", color: "#D9D9D9" },
+                { offset: "100%", color: "#737373" },
+              ],
+              attrs: { x1: "50%", y1: "100%", x2: "50%", y2: "0%" },
+            },
+          };
+
+          // Update main body
+          element.attr(
+            "mainBody/fill",
+            isOpen ? openColors.mainBody : closedColors.mainBody
+          );
+
+          // Update control panels
+          for (let i = 1; i <= 10; i++) {
+            element.attr(
+              `controlPanel${i}/fill`,
+              isOpen ? openColors.panel : closedColors.panel
+            );
+          }
+
+          // Update other components if needed
+          element.attr(
+            "topComponent/fill",
+            isOpen ? openColors.panel : closedColors.panel
+          );
+          element.attr(
+            "rightComponent/fill",
+            isOpen ? openColors.panel : closedColors.panel
+          );
+          element.attr(
+            "leftFoot/fill",
+            isOpen ? openColors.panel : closedColors.panel
+          );
+          element.attr(
+            "rightFoot/fill",
+            isOpen ? openColors.panel : closedColors.panel
+          );
+        }
       }
 
       return updated;
@@ -3250,6 +3341,7 @@ const DashboardEditor = () => {
       isRunning: isRunning,
     });
   };
+
   const toggleRunning = (id) => {
     console.log("[React] toggleRunning called for id:", id);
     const current = elements[id]?.isRunning || false;
