@@ -6,8 +6,8 @@ class VatWithAgitator extends joint.dia.Element {
       ...super.defaults,
       type: "VatWithAgitator",
       size: { width: 617, height: 761 },
-      waterLevel: 0.2, // 0 to 1 (0% to 100%)
-      agitatorSpeed: 0, // 0 to 1 (0% to 100% speed)
+      waterLevel: 0.2,
+      agitatorSpeed: 0,
       ports: {
         groups: {
           in: {
@@ -131,7 +131,6 @@ class VatWithAgitator extends joint.dia.Element {
         root: {
           magnetSelector: "body",
         },
-        // Connector One
         connectorOneRect1: {
           transform: "rotate(-90 83.6196 52)",
           width: 33.2459,
@@ -167,8 +166,6 @@ class VatWithAgitator extends joint.dia.Element {
           stroke: "#808080",
           strokeWidth: 4,
         },
-
-        // Vat Body - Top Lid
         topLidPath1: {
           d: "M580.231 111.576C620.286 141.995 613.578 168.86 613.578 168.86H308.328H308.289L3.4223 169C3.4223 169 -3.28584 142.136 36.7692 111.716C117.084 50.7227 308.289 52.0028 308.289 52.0028C308.289 52.0028 499.916 50.5826 580.231 111.576Z",
           fill: {
@@ -615,22 +612,18 @@ const VatWithAgitatorView = joint.dia.ElementView.extend({
       return null;
     }
 
-    // Set transform origin to the center of the pole (x=122, y=650)
     fanEl.style.transformOrigin = "122px 650px";
 
-    // Create keyframes for 3D rotation around Y-axis
     const keyframes = [
       { transform: "rotateY(0deg)" },
       { transform: "rotateY(360deg)" },
     ];
 
     this.fanAnimation = fanEl.animate(keyframes, {
-      duration: 2000, // Base duration (will be adjusted by speed)
+      duration: 2000,
       iterations: Infinity,
       easing: "linear",
     });
-
-    // Start paused until speed is set
     this.fanAnimation.pause();
     return this.fanAnimation;
   },
@@ -645,9 +638,7 @@ const VatWithAgitatorView = joint.dia.ElementView.extend({
       this.findBySelector("waterLevelDisplayText")[0] ||
       this.el.querySelector('[joint-selector="waterLevelDisplayText"]') ||
       this.el.querySelector('path[selector="waterLevelDisplayText"]');
-
     console.log("waterLevel", waterLevel);
-
     if (waterFill) {
       const displayY = 216;
       const displayHeight = 509;
@@ -670,21 +661,15 @@ const VatWithAgitatorView = joint.dia.ElementView.extend({
       waterText.textContent = `Water Level: ${Math.round(waterLevel * 100)}%`;
     }
   },
-
   updateAgitator() {
     const speed = this.model.get("agitatorSpeed");
     const agitatorText = this.findBySelector("agitatorDisplayText")[0];
-
-    // Update display text
     if (agitatorText) {
       agitatorText.textContent = `Agitator: ${Math.round(speed * 100)}%`;
     }
-
-    // Handle animation
     if (speed > 0) {
       const anim = this.getFanAnimation();
       if (anim) {
-        // Adjust playback rate based on speed (0.1-2 range)
         anim.playbackRate = speed * 2;
         anim.play();
       } else {
@@ -694,8 +679,6 @@ const VatWithAgitatorView = joint.dia.ElementView.extend({
       if (this.fanAnimation) {
         this.fanAnimation.cancel();
         this.fanAnimation = null;
-
-        // Reset rotation when stopped
         const fanEl = this.findBySelector("rudderFan")[0];
         if (fanEl) {
           fanEl.style.transform = "rotateY(0deg)";
@@ -705,7 +688,6 @@ const VatWithAgitatorView = joint.dia.ElementView.extend({
   },
 
   onRemove() {
-    // Clean up animation when element is removed
     if (this.fanAnimation) {
       this.fanAnimation.cancel();
     }

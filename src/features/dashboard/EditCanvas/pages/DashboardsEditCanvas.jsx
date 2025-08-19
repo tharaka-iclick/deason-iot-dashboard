@@ -857,6 +857,13 @@ const DashboardEditor = () => {
     const payload = data || {};
     // const value = payload[selectedValue];
 
+    const cellId = getCellId(cell);
+
+    // Clean up any existing subscription
+    if (deviceSubscriptions.current.has(cellId)) {
+      deviceSubscriptions.current.get(cellId)();
+    }
+
     console.log("payload01", data);
     console.log("asas selectedEUI", selectedEUI);
     console.log("asas selectedDevice", selectedDevice);
@@ -901,7 +908,8 @@ const DashboardEditor = () => {
       }
     );
 
-    unsubscribe();
+    // unsubscribe();
+    deviceSubscriptions.current.set(cellId, unsubscribe);
   };
   const subscribeCellToDevice = (cell, eui, deviceId, deviceModel) => {
     const cellId = getCellId(cell);
@@ -928,6 +936,39 @@ const DashboardEditor = () => {
               if (!selectedValue || !payloadKeys.includes(selectedValue)) {
                 setSelectedValue(payloadKeys);
               }
+            }
+            const sensorDataToUse = payloadKeys || selectedValue;
+
+            console.log("sensorDataToUse", sensorDataToUse);
+            if (sensorDataToUse) {
+              const unsubscribe = listenForSensoreData(
+                eui,
+                deviceId,
+                sensorDataToUse,
+                (value) => {
+                  if (typeof value !== "undefined") {
+                    const modelName = sensorDataToUse || "Device";
+                    cell.attr("label/text", `${modelName}: ${value}`);
+
+                    if (typeof value === "number") {
+                      const range = deviceModels[deviceModel]?.range || [
+                        0, 100,
+                      ];
+                      const normalizedValue = Math.min(
+                        Math.max((value - range[0]) / (range[1] - range[0]), 0),
+                        1
+                      );
+                      const hue = (1 - normalizedValue) * 120;
+                      cell.attr("body/fill", `hsl(${hue}, 100%, 80%)`);
+                    } else {
+                      cell.attr("body/fill", "#e0e0e0");
+                    }
+                  }
+                }
+              );
+
+              // Store the unsubscribe function
+              deviceSubscriptions.current.set(cellId, unsubscribe);
             }
             //updateCellDisplay(cell, data);
             // Do something with the payload
@@ -1122,6 +1163,17 @@ const DashboardEditor = () => {
         setCurrentFileHandle(fileHandle);
         setCurrentFileName(fileHandle.name);
         setCurrentCmdId(null);
+
+        paperRef.current.model.getCells().forEach((cell) => {
+          if (cell.prop("custom/deviceEUI")) {
+            subscribeCellToDevice(
+              cell,
+              cell.prop("custom/deviceEUI"),
+              cell.prop("custom/deviceID"),
+              cell.prop("custom/deviceModel")
+            );
+          }
+        });
       };
       fileReader.readAsText(file);
     } catch (error) {
