@@ -1007,7 +1007,7 @@ const setInspectorContainer = (newValue) => {
                                   else   if (selectedValue== "agi_mixer"&& value == "on") {
                                                   updateElementAttributes(selectedElement, {
                         ...elementData,
-                        agitatorSpeed: 100,
+                        agitatorSpeed: 1,
                       });
     // selectedCell.startAnimation("rotate3d");
     // const imageEl = document.querySelector(
