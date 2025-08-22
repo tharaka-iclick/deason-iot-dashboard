@@ -90,25 +90,65 @@ class Pipe extends joint.dia.Link {
         liquid: {
           connection: true,
           stroke: LIQUID_COLOR,
-          strokeWidth: 10,
+          strokeWidth: 20,
           strokeLinejoin: "round",
           strokeLinecap: "square",
-          strokeDasharray: "10,20",
+          strokeDasharray: "18,20",
         },
         line: {
           connection: true,
-          stroke: "#eee",
-          strokeWidth: 10,
+          stroke: LIQUID_COLOR,
+          strokeWidth: 20,
           strokeLinejoin: "round",
           strokeLinecap: "round",
         },
         outline: {
           connection: true,
           stroke: "#444",
-          strokeWidth: 16,
+          strokeWidth: 32,
           strokeLinejoin: "round",
           strokeLinecap: "round",
         },
+        staticDots1: {
+          connection: true,
+          stroke: "rgba(255,255,255,0.5)",
+          strokeWidth: 10,
+          strokeLinecap: "round",
+          strokeLinejoin: "round",
+          strokeDasharray: "1,15,0.5,20,1.5,25",
+          fill: "none",
+          transform: "translate(0,-4)",
+        },
+        staticDots2: {
+          connection: true,
+          stroke: "rgba(255,255,255,0.4)",
+          strokeWidth: 7,
+          strokeLinecap: "round",
+          strokeLinejoin: "round",
+          strokeDasharray: "0.8,18,2,22,0.5,16",
+          fill: "none",
+          transform: "translate(0,3)",
+        },
+        staticDots3: {
+          connection: true,
+          stroke: "rgba(255,255,255,0.2)",
+          strokeWidth: 12,
+          strokeLinecap: "round",
+          strokeLinejoin: "round",
+          strokeDasharray: "0.3,12,1,28,0.8,14",
+          fill: "none",
+          transform: "translate(-2,0)",
+        },
+        // staticDots4: {
+        //   connection: true,
+        //   stroke: "rgba(255,255,255,0.6)",
+        //   strokeWidth: 10,
+        //   strokeLinecap: "round",
+        //   strokeLinejoin: "round",
+        //   strokeDasharray: "0.5,20,1.5,16,0.3,24",
+        //   fill: "none",
+        //   transform: "translate(2,-1)",
+        // },
       },
     };
   }
@@ -118,6 +158,10 @@ class Pipe extends joint.dia.Link {
             <path @selector="outline" fill="none"/>
             <path @selector="line" fill="none"/>
             <path @selector="liquid" fill="none"/>
+            <path @selector="staticDots1" fill="none"/>
+            <path @selector="staticDots2" fill="none"/>
+            <path @selector="staticDots3" fill="none"/>
+            <path @selector="staticDots4" fill="none"/>
         `;
   }
 }
@@ -129,7 +173,7 @@ const PipeView = joint.dia.LinkView.extend({
 
   initFlag: [...joint.dia.LinkView.prototype.initFlag, FLOW_FLAG],
 
-  flowAnimation: null,
+  flowAnimations: null,
 
   confirmUpdate(...args) {
     let flags = joint.dia.LinkView.prototype.confirmUpdate.call(this, ...args);
@@ -140,50 +184,65 @@ const PipeView = joint.dia.LinkView.extend({
     return flags;
   },
 
-  getFlowAnimation() {
-    let { flowAnimation } = this;
-    if (flowAnimation) return flowAnimation;
-    // const [liquidEl] = this.findBySelector("liquid");
+  getFlowAnimations() {
+    if (this.flowAnimations) return this.flowAnimations;
 
-    const liquidEl =
-      this.findBySelector("liquid")[0] ||
-      this.el.querySelector('[joint-selector="liquid"]') ||
-      this.el.querySelector('path[selector="liquid"]');
+    this.flowAnimations = {};
 
-    console.log("liquidEl:", liquidEl);
-    // stroke-dashoffset = sum(stroke-dasharray) * n;
-    // 90 = 10 + 20 + 10 + 20 + 10 + 20
+    // Get all elements that should have the liquid animation
+    const animatedElements = [
+      { selector: "liquid", duration: 1000, offset: 90 },
+      { selector: "staticDots1", duration: 1200, offset: 60 },
+      { selector: "staticDots2", duration: 1400, offset: 70 },
+      { selector: "staticDots3", duration: 1100, offset: 55 },
+      { selector: "staticDots4", duration: 1300, offset: 65 },
+    ];
 
-    if (!liquidEl) {
-      console.error(
-        "liquidEl element not found! Available elements:",
-        this.el.innerHTML
-      );
-      return null;
-    }
-    const keyframes = { strokeDashoffset: [90, 0] };
-    flowAnimation = liquidEl.animate(keyframes, {
-      fill: "forwards",
-      duration: 1000,
-      iterations: Infinity,
-      easing: "linear",
+    animatedElements.forEach(({ selector, duration, offset }) => {
+      const element =
+        this.findBySelector(selector)[0] ||
+        this.el.querySelector(`[joint-selector="${selector}"]`) ||
+        this.el.querySelector(`path[selector="${selector}"]`);
+
+      if (element) {
+        // element.style.strokeDasharray = "2 5";
+        // element.style.strokeLinecap = "round";
+
+        const keyframes = { strokeDashoffset: [offset, 0] };
+        const animation = element.animate(keyframes, {
+          fill: "forwards",
+          duration: duration,
+          iterations: Infinity,
+          easing: "linear",
+        });
+
+        this.flowAnimations[selector] = animation;
+      } else {
+        console.warn(`Element with selector "${selector}" not found`);
+      }
     });
-    this.flowAnimation = flowAnimation;
-    return flowAnimation;
+
+    return this.flowAnimations;
   },
 
   updateFlow() {
     const flow = this.model.get("flow");
-    if (flow) {
-      this.getFlowAnimation().play();
-    } else {
-      this.getFlowAnimation().pause();
-    }
+    const animations = this.getFlowAnimations();
+
+    Object.values(animations).forEach((animation) => {
+      if (flow) {
+        animation.play();
+      } else {
+        animation.pause();
+      }
+    });
   },
 
   onRemove() {
-    if (this.flowAnimation) {
-      this.flowAnimation.cancel();
+    if (this.flowAnimations) {
+      Object.values(this.flowAnimations).forEach((animation) => {
+        animation.cancel();
+      });
     }
     joint.dia.LinkView.prototype.onRemove.apply(this, arguments);
   },
@@ -200,11 +259,11 @@ class HeatPump extends joint.dia.Element {
         root: {
           magnetSelector: "body",
         },
-        body: {
-          refWidth: "100%",
-          refHeight: "100%",
-          fill: "none",
-        },
+        // body: {
+        //   refWidth: "100%",
+        //   refHeight: "100%",
+        //   fill: "none",
+        // },
       },
       ports: {
         groups: {
@@ -987,10 +1046,10 @@ const DashboardEditor = () => {
               //  const normalizedValue = Math.min(Math.max(value / 100, 0), 1);
               //  const hue = (1 - normalizedValue) * 120;
               //  cell.attr("body/fill", `hsl(${hue}, 100%, 80%)`);
-            } else if (selectedValue == "magnet_status") {
+            } else if (selectedValue == "magnet_status" && value == "open") {
               const isOpen = value === "open";
               updateElementAttributes(selectedElement, {
-                magnet_status: value,
+                magnet_status: "open",
               });
             } else if (value == "open") {
               turnOn(selectedElement);
@@ -1097,10 +1156,10 @@ const DashboardEditor = () => {
               console.log("payloadKeys", payloadKeys);
               console.log("selectedValuew", selectedValue);
               if (!selectedValue || !payloadKeys.includes(selectedValue)) {
-                setSelectedValue(payloadKeys);
+                setSelectedValue(payloadKeys[0]);
               }
             }
-            const sensorDataToUse = payloadKeys || selectedValue;
+            const sensorDataToUse = payloadKeys[0] || selectedValue;
 
             console.log("sensorDataToUse", sensorDataToUse);
             if (sensorDataToUse) {
@@ -1149,6 +1208,7 @@ const DashboardEditor = () => {
       cell.prop("custom/deviceModel", deviceModel);
     }
   };
+
   const unsubscribeCellFromDevice = (cellId) => {
     if (deviceSubscriptions.current.has(cellId)) {
       deviceSubscriptions.current.get(cellId)();
@@ -1581,18 +1641,18 @@ const DashboardEditor = () => {
       elementView.addTools(
         new dia.ToolsView({
           tools: [
-            // new joint.elementTools.Boundary({
-            //   padding: 10,
-            //   useModelGeometry: true,
-            //   attributes: {
-            //     fill: "#4a7bcb",
-            //     "fill-opacity": 0.1,
-            //     stroke: "#4a7bcb",
-            //     "stroke-width": 2,
-            //     "stroke-dasharray": "none",
-            //     "pointer-events": "none",
-            //   },
-            // }),
+            new joint.elementTools.Boundary({
+              // padding: 10,
+              useModelGeometry: true,
+              attributes: {
+                fill: "#4a7bcb",
+                "fill-opacity": 0.1,
+                stroke: "#4a7bcb",
+                "stroke-width": 2,
+                "stroke-dasharray": "none",
+                "pointer-events": "none",
+              },
+            }),
             new joint.elementTools.Remove({
               useModelGeometry: true,
               x: -10,
@@ -1604,9 +1664,9 @@ const DashboardEditor = () => {
       );
     });
 
-    // paper.on("element:pointerclick", (elementView) => {
-    //   elementView.removeTools();
-    // });
+    paper.on("element:pointerclick", (elementView) => {
+      elementView.removeTools();
+    });
 
     let currentLinkToolsView;
 
@@ -3131,7 +3191,7 @@ const DashboardEditor = () => {
       power: 1,
       waterLevel: 0.5,
       agitatorSpeed: 0.2,
-      magnet_status: "open",
+      magnet_status: "close",
     };
 
     if (element instanceof HeatPump) {
@@ -3140,7 +3200,7 @@ const DashboardEditor = () => {
       defaultAttributes.waterLevel = 0.5;
       defaultAttributes.agitatorSpeed = 0.2;
     } else if (element instanceof MotorPump) {
-      defaultAttributes.magnet_status = "open";
+      defaultAttributes.magnet_status = "close";
     }
 
     setElements((prev) => ({
@@ -3152,6 +3212,7 @@ const DashboardEditor = () => {
       },
     }));
   };
+
   const updateElementAttributes = (id, attributes) => {
     console.log(
       `Water Level: ${attributes.waterLevel}, Agitator Speed: ${attributes.agitatorSpeed}`
@@ -3175,7 +3236,7 @@ const DashboardEditor = () => {
         const element = updated[id].element;
         console.log("[React] JointJS element:", element);
 
-        if (attributes.isRunning !== undefined) {
+        if (attributes.power !== undefined) {
           console.log("[React] Updating power to:", attributes.power);
           element.set("power", attributes.power);
           element.attr(
@@ -3247,78 +3308,42 @@ const DashboardEditor = () => {
             attributes.magnet_status
           );
           element.set("magnet_status", attributes.magnet_status);
+
           const isOpen = attributes.magnet_status === "open";
           console.log("[React] Updating magnet_status isOpen:", isOpen);
 
-          // Define color schemes
-          const openColors = {
-            mainBody: {
-              type: "linearGradient",
-              stops: [
-                { offset: "0%", color: "#078C00" },
-                { offset: "100%", color: "#C7FFC4" },
-              ],
-            },
-            panel: {
-              type: "linearGradient",
-              stops: [
-                { offset: "15.3846%", color: "#C7FFC4" },
-                { offset: "100%", color: "#078C00" },
-              ],
-              attrs: { x1: "50%", y1: "100%", x2: "50%", y2: "0%" },
-            },
-          };
+          if (isOpen) {
+            // Define only OPEN color scheme
+            const openColors = {
+              mainBody: {
+                type: "linearGradient",
+                stops: [
+                  { offset: "0%", color: "#078C00" },
+                  { offset: "100%", color: "#C7FFC4" },
+                ],
+              },
+              panel: {
+                type: "linearGradient",
+                stops: [
+                  { offset: "15.3846%", color: "#C7FFC4" },
+                  { offset: "100%", color: "#078C00" },
+                ],
+                attrs: { x1: "50%", y1: "100%", x2: "50%", y2: "0%" },
+              },
+            };
 
-          const closedColors = {
-            mainBody: {
-              type: "linearGradient",
-              stops: [
-                { offset: "0%", color: "#737373" },
-                { offset: "100%", color: "#D9D9D9" },
-              ],
-              attrs: { x1: "100%", y1: "50%", x2: "0%", y2: "50%" },
-            },
-            panel: {
-              type: "linearGradient",
-              stops: [
-                { offset: "15.3846%", color: "#D9D9D9" },
-                { offset: "100%", color: "#737373" },
-              ],
-              attrs: { x1: "50%", y1: "100%", x2: "50%", y2: "0%" },
-            },
-          };
+            // Apply only when OPEN
+            element.attr("mainBody/fill", openColors.mainBody);
 
-          // Update main body
-          element.attr(
-            "mainBody/fill",
-            isOpen ? openColors.mainBody : closedColors.mainBody
-          );
+            for (let i = 1; i <= 10; i++) {
+              element.attr(`controlPanel${i}/fill`, openColors.panel);
+            }
 
-          // Update control panels
-          for (let i = 1; i <= 10; i++) {
-            element.attr(
-              `controlPanel${i}/fill`,
-              isOpen ? openColors.panel : closedColors.panel
-            );
+            element.attr("topComponent/fill", openColors.panel);
+            element.attr("rightComponent/fill", openColors.panel);
+            element.attr("leftFoot/fill", openColors.panel);
+            element.attr("rightFoot/fill", openColors.panel);
           }
-
-          // Update other components if needed
-          element.attr(
-            "topComponent/fill",
-            isOpen ? openColors.panel : closedColors.panel
-          );
-          element.attr(
-            "rightComponent/fill",
-            isOpen ? openColors.panel : closedColors.panel
-          );
-          element.attr(
-            "leftFoot/fill",
-            isOpen ? openColors.panel : closedColors.panel
-          );
-          element.attr(
-            "rightFoot/fill",
-            isOpen ? openColors.panel : closedColors.panel
-          );
         }
       }
 

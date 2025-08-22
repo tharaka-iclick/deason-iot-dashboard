@@ -203,7 +203,7 @@ class VatWithAgitator extends joint.dia.Element {
           strokeWidth: 4,
         },
         waterDisplayGroup: {
-          position: "reletive",
+          // position: "relative",
         },
         waterLevelFill: {
           x: 37,
@@ -221,6 +221,86 @@ class VatWithAgitator extends joint.dia.Element {
           stroke: "#737373",
           strokeWidth: 4,
         },
+        bubble1: {
+          cx: 60,
+          cy: 700,
+          r: 10,
+          fill: "rgba(255, 255, 255, 0.7)",
+          stroke: "#E0FFFF",
+          strokeWidth: 1,
+        },
+        bubble2: {
+          cx: 100,
+          cy: 700,
+          r: 4,
+          fill: "rgba(255, 255, 255, 0.7)",
+          stroke: "#E0FFFF",
+          strokeWidth: 1,
+        },
+        bubble3: {
+          cx: 140,
+          cy: 700,
+          r: 12,
+          fill: "rgba(255, 255, 255, 0.7)",
+          stroke: "#E0FFFF",
+          strokeWidth: 1,
+        },
+        bubble4: {
+          cx: 170,
+          cy: 700,
+          r: 7,
+          fill: "rgba(255, 255, 255, 0.7)",
+          stroke: "#E0FFFF",
+          strokeWidth: 1,
+        },
+        bubble5: {
+          cx: 60,
+          cy: 700,
+          r: 10,
+          fill: "rgba(255, 255, 255, 0.7)",
+          stroke: "#E0FFFF",
+          strokeWidth: 1,
+        },
+        bubble6: {
+          cx: 100,
+          cy: 700,
+          r: 4,
+          fill: "rgba(255, 255, 255, 0.7)",
+          stroke: "#E0FFFF",
+          strokeWidth: 1,
+        },
+        bubble7: {
+          cx: 140,
+          cy: 700,
+          r: 12,
+          fill: "rgba(255, 255, 255, 0.7)",
+          stroke: "#E0FFFF",
+          strokeWidth: 1,
+        },
+        bubble8: {
+          cx: 170,
+          cy: 700,
+          r: 7,
+          fill: "rgba(255, 255, 255, 0.7)",
+          stroke: "#E0FFFF",
+          strokeWidth: 1,
+        },
+        bubble9: {
+          cx: 140,
+          cy: 700,
+          r: 12,
+          fill: "rgba(255, 255, 255, 0.7)",
+          stroke: "#E0FFFF",
+          strokeWidth: 1,
+        },
+        bubble10: {
+          cx: 170,
+          cy: 700,
+          r: 7,
+          fill: "rgba(255, 255, 255, 0.7)",
+          stroke: "#E0FFFF",
+          strokeWidth: 1,
+        },
         rudderPole: {
           x: 113,
           y: 218,
@@ -236,8 +316,6 @@ class VatWithAgitator extends joint.dia.Element {
             attrs: { x1: "0%", y1: "0%", x2: "100%", y2: "0%" },
           },
         },
-
-        // Rudder - Fan Unit
         fanConnector: {
           x: 106,
           y: 570,
@@ -263,9 +341,8 @@ class VatWithAgitator extends joint.dia.Element {
             ],
             attrs: { x1: "50%", y1: "0%", x2: "50%", y2: "100%" },
           },
-          transformOrigin: "122 650", // Center of rotation for the fan
+          transformOrigin: "122 650",
         },
-        // Side Displays
         agitatorDisplayRect1: {
           x: 275,
           y: 553,
@@ -292,7 +369,6 @@ class VatWithAgitator extends joint.dia.Element {
           fontFamily: "Arial",
           fill: "#333",
         },
-
         waterLevelRect1: {
           x: 275,
           y: 396,
@@ -319,7 +395,6 @@ class VatWithAgitator extends joint.dia.Element {
           fontFamily: "Arial",
           fill: "#333",
         },
-
         tempLevelRect1: {
           x: 275,
           y: 244,
@@ -346,8 +421,6 @@ class VatWithAgitator extends joint.dia.Element {
           fontFamily: "Arial",
           fill: "#333",
         },
-
-        // Motor Connector
         motorConnector: {
           d: "M73.399 89L73 53H156V66.6C124.804 71.9268 102.939 77.8648 73.399 89Z",
           fill: "#CECECE",
@@ -357,7 +430,6 @@ class VatWithAgitator extends joint.dia.Element {
   }
 
   preinitialize() {
-    // Wrap all content in a scaling group
     this.markup = joint.util.svg`
             <g @selector="scalingGroup">
                 <!-- Your existing markup goes here -->
@@ -375,6 +447,16 @@ class VatWithAgitator extends joint.dia.Element {
                     <g @selector="waterDisplayGroup">
                         <rect @selector="transDisplay"/>
                         <rect @selector="waterLevelFill"/>
+                        <circle @selector="bubble1"/>
+                        <circle @selector="bubble2"/>
+                        <circle @selector="bubble3"/>  
+                        <circle @selector="bubble4"/>
+                        <circle @selector="bubble5"/>
+                        <circle @selector="bubble6"/>
+                        <circle @selector="bubble7"/>  
+                        <circle @selector="bubble8"/> 
+                        <circle @selector="bubble9"/>
+                        <circle @selector="bubble10"/> 
                     </g>
                 </g>
                 <g @selector="rudder">
@@ -420,6 +502,8 @@ class VatWithAgitator extends joint.dia.Element {
     // Initialize scale
     this.updateScale();
 
+    this.bubbleAnimations = [];
+
     // Update water level when it changes
     // this.on("change:waterLevel", this.updateWaterLevel);
     // this.on("change:agitatorSpeed", this.updateAgitator);
@@ -444,22 +528,16 @@ class VatWithAgitator extends joint.dia.Element {
     // Update water level position (needs special handling)
     // this.updateWaterLevel();
   }
-
   scalePorts(scaleX, scaleY) {
-    // Calculate minimum scale to maintain proportions
     const portScale = Math.min(scaleX, scaleY);
-
-    // Update port group sizes
     this.prop("ports/groups/in/size", {
       width: 59.5708 * portScale,
       height: 33.2459 * portScale,
     });
-
     this.prop("ports/groups/out/size", {
       width: 37.7213 * portScale,
       height: 61.982 * portScale,
     });
-
     const inPipeBodyX = 83.6196 * scaleX;
     const inPipeBodyY = 52 * scaleY;
     this.prop("ports/groups/in/attrs/pipeBody", {
@@ -469,7 +547,6 @@ class VatWithAgitator extends joint.dia.Element {
       x: 83.6196 * scaleX,
       y: 52 * scaleY,
     });
-
     this.prop("ports/groups/in/attrs/pipeEnd", {
       transform: `rotate(-90 ${76 * scaleX} ${18.7541 * scaleY})`,
       width: 5.96721 * portScale,
@@ -477,7 +554,6 @@ class VatWithAgitator extends joint.dia.Element {
       x: 76 * scaleX,
       y: 18.7541 * scaleY,
     });
-
     this.prop("ports/groups/in/attrs/pipeEndStroke", {
       transform: `rotate(-90 ${78 * scaleX} ${10.7869 * scaleY})`,
       width: 8.78689 * portScale,
@@ -486,26 +562,22 @@ class VatWithAgitator extends joint.dia.Element {
       y: 10.7869 * scaleY,
       strokeWidth: 4 * portScale,
     });
-
     this.prop("ports/groups/out/position/args", {
       x: 610 * scaleX,
       y: 670 * scaleY,
     });
-
     this.prop("ports/groups/out/attrs/pipeBody", {
       width: 37.7213 * scaleX,
       height: 61.982 * scaleY,
       x: scaleX,
       y: scaleY,
     });
-
     this.prop("ports/groups/out/attrs/pipeEnd", {
       width: 6.77049 * scaleX,
       height: 77.1171 * scaleY,
       x: 37.7213 * scaleX,
       y: -7.928 * scaleY,
     });
-
     this.prop("ports/groups/out/attrs/pipeEndStroke", {
       width: 10.5082 * scaleX,
       height: 73.1171 * scaleY,
@@ -599,6 +671,70 @@ const VatWithAgitatorView = joint.dia.ElementView.extend({
     return flags;
   },
 
+  initBubbleAnimations() {
+    if (this.bubbleAnimationsInitialized) return;
+
+    const bubbles = [];
+    for (let i = 1; i <= 10; i++) {
+      const bubble =
+        this.findBySelector(`bubble${i}`)[0] ||
+        this.el.querySelector(`[joint-selector="bubble${i}"]`) ||
+        this.el.querySelector(`circle[selector="bubble${i}"]`);
+      if (bubble) bubbles.push(bubble);
+    }
+
+    this.bubbleAnimations = bubbles.map((bubble, index) => {
+      // Randomize bubble properties
+      const size = 3 + Math.random() * 12;
+      const startX = 40 + Math.random() * 140;
+      const startY = 700 + Math.random() * 20;
+      const duration = 2000 + Math.random() * 3000;
+      const delay = Math.random() * 2000;
+      const driftAmount = 10 + Math.random() * 30;
+
+      // Set initial bubble properties
+      bubble.setAttribute("r", size);
+      bubble.setAttribute("cx", startX);
+      bubble.setAttribute("cy", startY);
+
+      // Create animation
+      const keyframes = [
+        {
+          transform: `translate(0, 0)`,
+          opacity: 0.3 + Math.random() * 0.5,
+        },
+        {
+          transform: `translate(${
+            index % 2 === 0 ? driftAmount : -driftAmount
+          }px, -500px)`,
+          opacity: 0,
+        },
+      ];
+
+      return bubble.animate(keyframes, {
+        duration: duration,
+        delay: delay,
+        fill: "forwards",
+        iterations: Infinity,
+      });
+    });
+
+    this.bubbleAnimationsInitialized = true;
+  },
+
+  updateBubbleAnimations(speed) {
+    if (!this.bubbleAnimationsInitialized) this.initBubbleAnimations();
+
+    this.bubbleAnimations.forEach((animation) => {
+      if (speed > 0) {
+        animation.playbackRate = speed * 3;
+        animation.play();
+      } else {
+        animation.pause();
+      }
+    });
+  },
+
   getFanAnimation() {
     if (this.fanAnimation) return this.fanAnimation;
 
@@ -656,17 +792,37 @@ const VatWithAgitatorView = joint.dia.ElementView.extend({
         `rgba(100, 150, ${blueIntensity}, ${opacity})`
       );
     }
-
     if (waterText) {
-      waterText.textContent = `Water Level: ${Math.round(waterLevel * 100)}%`;
+      waterText.innerHTML = `<tspan fill="#000000">LEVEL:</tspan>\n<tspan fill="#406AE6">${Math.round(
+        waterLevel * 100
+      )}%</tspan>`;
+      waterText.setAttribute(
+        "style",
+        "white-space: nowrap; font-size: 45px; font-family: Arial, sans-serif; font-weight: bold;"
+      );
     }
   },
+
   updateAgitator() {
     const speed = this.model.get("agitatorSpeed");
-    const agitatorText = this.findBySelector("agitatorDisplayText")[0];
+    const agitatorText =
+      this.findBySelector("agitatorDisplayText")[0] ||
+      this.el.querySelector('[joint-selector="agitatorDisplayText"]') ||
+      this.el.querySelector('path[selector="agitatorDisplayText"]');
+    // const agitatorText = this.findBySelector("agitatorDisplayText")[0];
+
     if (agitatorText) {
-      agitatorText.textContent = `Agitator: ${Math.round(speed * 100)}%`;
+      // agitatorText.textContent = `Agitator 81: ${Math.round(speed * 100)}%`;
+      agitatorText.innerHTML = `<tspan fill="#000000">AGITATOR:</tspan>\n<tspan fill="#078C00">${Math.round(
+        speed * 100
+      )}%</tspan>`;
+      agitatorText.setAttribute(
+        "style",
+        "white-space: nowrap; font-size: 35px; font-family: Arial, sans-serif; font-weight: bold;"
+      );
     }
+
+    this.updateBubbleAnimations(speed);
     if (speed > 0) {
       const anim = this.getFanAnimation();
       if (anim) {
