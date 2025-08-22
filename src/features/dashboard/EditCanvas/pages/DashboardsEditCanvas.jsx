@@ -900,7 +900,7 @@ const DashboardEditor = () => {
   const [selectedCell, setSelectedCell] = useState(null);
   const [deviceModels, setDeviceModels] = useState({});
   const [devices, setDevices] = useState({});
-  const [selectedValue, setSelectedValue] = useState("");
+  const [selectedValue, setSelectedValue] = useState([]);
   const [availableValues, setAvailableValues] = useState([]);
   const [payload, setPayload] = useState({});
   const [animationType, setAnimationType] = useState("pulse");
@@ -1017,13 +1017,13 @@ const DashboardEditor = () => {
     const unsubscribe = listenForSensoreData(
       selectedEUI,
       selectedDevice,
-      selectedValue,
+      selectedValue.length > 0 ? selectedValue[0] : null,
       (value) => {
         try {
           if (typeof value !== "undefined") {
             let displayText;
             try {
-              const modelName = formatKey(selectedValue) || "Device";
+              const modelName = formatKey(selectedValue.length > 0 ? selectedValue[0] : '') || "Device";
               if (typeof value === "number") {
                 // Format numbers with 2 decimal places
                 displayText = `${modelName}: ${value}`;
@@ -1043,7 +1043,7 @@ const DashboardEditor = () => {
               // cell.attr("label/text", "Error: Invalid Value");
             }
 
-            if (typeof value === "number" && selectedValue == "level") {
+            if (typeof value === "number" && selectedValue.includes("level")) {
               // Scale the tank height based on the value
               const tankPercentage = (value / 100) * 100; // Assuming value is 0-100
               // cell.scaleHeight(tankPercentage);
@@ -1062,7 +1062,7 @@ const DashboardEditor = () => {
               //  const normalizedValue = Math.min(Math.max(value / 100, 0), 1);
               //  const hue = (1 - normalizedValue) * 120;
               //  cell.attr("body/fill", `hsl(${hue}, 100%, 80%)`);
-            } else if (selectedValue == "magnet_status" && value == "open") {
+            } else if (selectedValue.includes("magnet_status") && value == "open") {
               const isOpen = value === "open";
               updateElementAttributes(selectedElement, {
                 magnet_status: "open",
@@ -1076,7 +1076,7 @@ const DashboardEditor = () => {
               //  if (imageEl) {
               //    imageEl.style.animationDuration = `${2 / animationSpeed}s`;
               //  }
-            } else if (selectedValue == "running_status" && value == "on") {
+            } else if (selectedValue.includes("running_status") && value == "on") {
               turnOn(selectedElement);
               selectedCell.tankVolumeUpAnimation();
               const imageEl = document.querySelector(
@@ -1085,7 +1085,7 @@ const DashboardEditor = () => {
               if (imageEl) {
                 imageEl.style.animationDuration = `${2 / animationSpeed}s`;
               }
-            } else if (selectedValue == "agi_mixer" && value == "on") {
+            } else if (selectedValue.includes("agi_mixer") && value == "on") {
               updateElementAttributes(selectedElement, {
                 ...elementData,
                 agitatorSpeed: 100,
@@ -1171,11 +1171,11 @@ const DashboardEditor = () => {
               setAvailableValues(payloadKeys);
               console.log("payloadKeys", payloadKeys);
               console.log("selectedValuew", selectedValue);
-              if (!selectedValue || !payloadKeys.includes(selectedValue)) {
-                setSelectedValue(payloadKeys[0]);
+              if (!selectedValue || selectedValue.length === 0 || !selectedValue.some(val => payloadKeys.includes(val))) {
+                setSelectedValue([payloadKeys[0]]);
               }
             }
-            const sensorDataToUse = payloadKeys[0] || selectedValue;
+            const sensorDataToUse = payloadKeys[0] || (selectedValue.length > 0 ? selectedValue[0] : null);
 
             console.log("sensorDataToUse", sensorDataToUse);
             if (sensorDataToUse) {
@@ -3249,7 +3249,8 @@ const DashboardEditor = () => {
   };
 
   const handleValueChange = (event) => {
-    setSelectedValue(event.target.value);
+    const value = typeof event.target.value === 'string' ? event.target.value.split(',') : event.target.value;
+    setSelectedValue(value);
     if (selectedCell) {
       console.log(
         "Stored deviceModelName:",
@@ -3920,12 +3921,55 @@ const DashboardEditor = () => {
                 </FormControl>
                 {selectedDevice && Object.keys(payload).length > 0 && (
                   <FormControl component="fieldset" fullWidth>
-                    <Typography variant="subtitle2">Display Value:</Typography>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                      <Typography variant="subtitle2">Display Value:</Typography>
+                      <Box sx={{ display: 'flex', gap: 1 }}>
+                        <Button 
+                          size="small" 
+                          onClick={() => setSelectedValue(availableValues)}
+                          disabled={selectedValue.length === availableValues.length}
+                        >
+                          Select All
+                        </Button>
+                        <Button 
+                          size="small" 
+                          onClick={() => setSelectedValue([])}
+                          disabled={selectedValue.length === 0}
+                        >
+                          Clear
+                        </Button>
+                      </Box>
+                    </Box>
                     <Select
+                      multiple
                       value={selectedValue}
                       onChange={handleValueChange}
                       size="small"
                       displayEmpty
+                      renderValue={(selected) => (
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                          {selected.length === 0 ? (
+                            <Typography variant="body2" color="text.secondary">
+                              Select values...
+                            </Typography>
+                          ) : (
+                            selected.map((value) => (
+                              <Chip 
+                                key={value} 
+                                label={value} 
+                                size="small"
+                                onDelete={() => {
+                                  const newValue = selectedValue.filter(v => v !== value);
+                                  setSelectedValue(newValue);
+                                }}
+                                onMouseDown={(event) => {
+                                  event.stopPropagation();
+                                }}
+                              />
+                            ))
+                          )}
+                        </Box>
+                      )}
                     >
                       {availableValues.map((value) => (
                         <MenuItem key={value} value={value}>
