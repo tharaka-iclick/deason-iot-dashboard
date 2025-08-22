@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { Activity, Thermometer, Droplets, Zap } from "lucide-react";
 import { updateMetrics, updateSensorData } from "../store/dashboardSlice";
+import { getDashboardsFromFirestore } from "../../../services/firebase/dataService";
 import {
   Box,
   Table,
@@ -23,7 +24,7 @@ import {
 import EditIcon from "@mui/icons-material/Edit";
 import DownloadIcon from "@mui/icons-material/Download";
 import AddIcon from "@mui/icons-material/Add";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 
 // import "./Dashboard.css";
 
@@ -84,13 +85,18 @@ export const Dashboard = () => {
   const dispatch = useDispatch();
   const { devices } = useSelector((state) => state.devices);
   const { metrics, sensorData } = useSelector((state) => state.dashboard);
+  const { user } = useSelector((state) => state.auth);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(5);
+  const [rowsPerPage] = useState(5);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [savedDashboards, setSavedDashboards] = useState([]);
+  const [dashboardsLoading, setDashboardsLoading] = useState(true);
+  const [saveSuccess, setSaveSuccess] = useState("");
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleSearchChange = (event) => {
     setSearch(event.target.value);
@@ -101,15 +107,13 @@ export const Dashboard = () => {
     setPage(newPage);
   };
 
-  const handleChangeRowsPerPage = (event) => {
-    setRowsPerPage(+event.target.value);
-    setPage(0);
-  };
 
-  const filteredRows = sampleData.filter(
-    (row) =>
-      row.title.toLowerCase().includes(search.toLowerCase()) ||
-      row.customerName.toLowerCase().includes(search.toLowerCase())
+
+  const filteredRows = savedDashboards.filter(
+    (dashboard) =>
+      dashboard.title?.toLowerCase().includes(search.toLowerCase()) ||
+      dashboard.farmId?.toLowerCase().includes(search.toLowerCase()) ||
+      dashboard.description?.toLowerCase().includes(search.toLowerCase())
   );
 
   useEffect(() => {
@@ -140,6 +144,31 @@ export const Dashboard = () => {
     setLoading(false);
   }, [devices, dispatch]);
 
+  useEffect(() => {
+    if (user?.uid) {
+      fetchSavedDashboards();
+    }
+  }, [user?.uid]);
+
+  // Handle success message from navigation state
+  useEffect(() => {
+    if (location.state?.showSuccess && location.state?.savedDashboard) {
+      const dashboard = location.state.savedDashboard;
+      const isUpdate = location.state.isUpdate;
+      const successMessage = isUpdate 
+        ? `Dashboard "${dashboard.title}" updated successfully!`
+        : `Dashboard "${dashboard.title}" saved successfully!`;
+      
+      setSaveSuccess(successMessage);
+      // Refresh the dashboard list
+      fetchSavedDashboards();
+      // Clear success message after 5 seconds
+      setTimeout(() => setSaveSuccess(""), 5000);
+      // Clear the navigation state
+      navigate(location.pathname, { replace: true });
+    }
+  }, [location.state, navigate, location.pathname]);
+
   const metricCards = [
     {
       icon: Activity,
@@ -166,10 +195,34 @@ export const Dashboard = () => {
     navigate("/dashboard/edit"); // your route
   };
 
+  const fetchSavedDashboards = async () => {
+    try {
+      setDashboardsLoading(true);
+      const dashboards = await getDashboardsFromFirestore(user?.uid);
+      setSavedDashboards(dashboards);
+    } catch (error) {
+      console.error('Error fetching dashboards:', error);
+      setError('Failed to load saved dashboards');
+    } finally {
+      setDashboardsLoading(false);
+    }
+  };
+
+  const handleDashboardSaved = (dashboardData) => {
+    if (dashboardData.firestoreId) {
+      setSaveSuccess(`Dashboard "${dashboardData.title}" saved successfully!`);
+      // Refresh the dashboard list
+      fetchSavedDashboards();
+      // Clear success message after 5 seconds
+      setTimeout(() => setSaveSuccess(""), 5000);
+    }
+  };
+
   return (
     <div className="dashboard">
       <Box>
         {error && <Alert severity="error">{error}</Alert>}
+        {saveSuccess && <Alert severity="success">{saveSuccess}</Alert>}
         <Typography variant="h5" gutterBottom>
           Dashboard
         </Typography>
@@ -189,19 +242,29 @@ export const Dashboard = () => {
               mb={2}
             >
               <TextField
-                label="Search"
+                label="Search dashboards"
                 variant="outlined"
                 size="small"
                 value={search}
                 onChange={handleSearchChange}
+                placeholder="Search by title, farm, or description..."
               />
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={handleAddClick}
-              >
-                Add
-              </Button>
+              <Stack direction="row" spacing={1}>
+                <Button
+                  variant="outlined"
+                  onClick={fetchSavedDashboards}
+                  disabled={dashboardsLoading}
+                >
+                  Refresh
+                </Button>
+                <Button
+                  variant="contained"
+                  startIcon={<AddIcon />}
+                  onClick={handleAddClick}
+                >
+                  Add Dashboard
+                </Button>
+              </Stack>
             </Stack>
 
             <TableContainer>
@@ -210,35 +273,63 @@ export const Dashboard = () => {
                   <TableRow>
                     <TableCell>Created Time</TableCell>
                     <TableCell>Title</TableCell>
-                    <TableCell>Customer Name</TableCell>
+                    <TableCell>Farm</TableCell>
+                    <TableCell>Description</TableCell>
                     <TableCell align="center">Actions</TableCell>
                   </TableRow>
                 </TableHead>
 
                 <TableBody>
-                  {filteredRows
+                  {dashboardsLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={5} align="center">
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, justifyContent: 'center' }}>
+                          <CircularProgress size={20} />
+                          Loading dashboards...
+                        </Box>
+                      </TableCell>
+                    </TableRow>
+                  ) : filteredRows
                     .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                    .map((row) => (
-                      <TableRow key={row.id}>
-                        <TableCell>{row.createdTime}</TableCell>
-                        <TableCell>{row.title}</TableCell>
-                        <TableCell>{row.customerName}</TableCell>
+                    .map((dashboard) => (
+                      <TableRow key={dashboard.id}>
+                        <TableCell>
+                          {dashboard.createdAt ? 
+                            new Date(dashboard.createdAt.toDate ? dashboard.createdAt.toDate() : dashboard.createdAt).toLocaleDateString() 
+                            : 'N/A'
+                          }
+                        </TableCell>
+                        <TableCell>{dashboard.title || 'Untitled'}</TableCell>
+                        <TableCell>{dashboard.farmName || 'N/A'}</TableCell>
+                        <TableCell>
+                          {dashboard.description ? 
+                            (dashboard.description.length > 50 ? 
+                              `${dashboard.description.substring(0, 50)}...` : 
+                              dashboard.description
+                            ) : 'No description'
+                          }
+                        </TableCell>
                         <TableCell align="center">
-                          <IconButton onClick={() => alert(`Edit ${row.id}`)}>
+                          <IconButton 
+                            onClick={() => navigate(`/dashboard/edit?id=${dashboard.id}`)}
+                            title="Edit Dashboard"
+                          >
                             <EditIcon />
                           </IconButton>
                           <IconButton
-                            onClick={() => alert(`Download ${row.id}`)}
+                            onClick={() => window.open(dashboard.filepath, '_blank')}
+                            title="Open Dashboard"
+                            disabled={!dashboard.filepath}
                           >
                             <DownloadIcon />
                           </IconButton>
                         </TableCell>
                       </TableRow>
                     ))}
-                  {filteredRows.length === 0 && (
+                  {!dashboardsLoading && filteredRows.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={4} align="center">
-                        No records found
+                      <TableCell colSpan={5} align="center">
+                        No dashboards found
                       </TableCell>
                     </TableRow>
                   )}
@@ -252,7 +343,6 @@ export const Dashboard = () => {
               page={page}
               onPageChange={handleChangePage}
               rowsPerPage={rowsPerPage}
-              onRowsPerPageChange={handleChangeRowsPerPage}
               rowsPerPageOptions={[5, 10, 25]}
             />
           </Paper>

@@ -13,6 +13,7 @@ import {
   FormControl,
   InputLabel,
   RadioGroup,
+  CircularProgress,
   FormControlLabel,
   Radio,
   Stack,
@@ -32,7 +33,11 @@ import {
   Opacity,
   Speed,
 } from "@mui/icons-material";
-import { ChevronDown, Undo, Redo } from "lucide-react";
+
+import { ChevronDown, Undo, Redo, ArrowLeft, Save } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { SaveDialog } from "../../../../shared/components/ui";
+import { useSelector } from "react-redux";
 import {
   Pipe01,
   // PipeView01,
@@ -66,13 +71,16 @@ import {
   getDevicePayload,
   listenForDevicePayload,
   listenForSensoreData,
+  getDashboardsFromFirestore,
 } from "../../../../../src/services/firebase/dataService";
 import {
-  getStorage,
   ref,
   uploadString,
   getDownloadURL,
+  getBytes,
 } from "firebase/storage";
+import { storage } from "../../../../../src/services/firebase/config";
+import { useLocation } from "react-router-dom";
 import { isEqual } from "lodash";
 
 const FLOW_FLAG = "flow";
@@ -864,6 +872,11 @@ class TemplateImage extends joint.dia.Element {
 }
 
 const DashboardEditor = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { user } = useSelector((state) => state.auth);
+
+  // Refs
   const paperContainerRef = useRef(null);
   const stencilContainerRef = useRef(null);
   const paperRef = useRef(null);
@@ -897,10 +910,13 @@ const DashboardEditor = () => {
   const [elements, setElements] = useState({});
 
   const [heightScale, setHeightScale] = useState(100); // Add this state
-
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [loadingExistingDashboard, setLoadingExistingDashboard] = useState(false);
+  const [existingDashboard, setExistingDashboard] = useState(null);
+  const [loadError, setLoadError] = useState("");
   const setInspectorContainer = (newValue) => {
-    inspectorContainerRef.current = newValue;
-  };
+  inspectorContainerRef.current = newValue;
+};
   const handleStartAnimation = () => {
     if (!selectedCell) return;
 
@@ -1252,6 +1268,71 @@ const DashboardEditor = () => {
 
     fetchDevice();
   }, [selectedEUI]);
+
+  // Load existing dashboard if ID is provided in URL
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const dashboardId = searchParams.get('id');
+    
+    if (dashboardId && user?.uid) {
+      loadExistingDashboard(dashboardId);
+    }
+  }, [location.search, user?.uid]);
+
+  const loadExistingDashboard = async (dashboardId) => {
+    try {
+      setLoadingExistingDashboard(true);
+      setLoadError("");
+      
+      // Get dashboard metadata from Firestore
+      const dashboards = await getDashboardsFromFirestore(user?.uid);
+      const dashboard = dashboards.find(d => d.id === dashboardId);
+      
+      if (!dashboard) {
+        throw new Error('Dashboard not found');
+      }
+
+      console.log('dashboard', dashboard);
+      
+      setExistingDashboard(dashboard);
+      
+      // Load the dashboard file from Firebase Storage using the SDK
+      if (dashboard.filepath) {
+        try {
+          // Directly fetch the URL you already have
+          const response = await fetch(dashboard.filepath);
+          
+          console.log('dashboardData', response);
+          if (!response.ok) {
+            throw new Error('Failed to load dashboard file from URL');
+          }
+      
+          const dashboardData = await response.json();
+ 
+          console.log('Dashboard data loaded:', dashboardData);
+       
+           // Load the graph data into the paper
+           if (paperRef.current && dashboardData) {
+             paperRef.current.model.fromJSON(dashboardData);
+             console.log('Dashboard loaded successfully via fetch:', dashboardData);
+           }
+       
+           // Update current file name
+           setCurrentFileName(dashboard.fileName || 'Untitled.joint');
+      
+        } catch (error) {
+          console.error('Failed to load dashboard from URL:', error);
+          throw new Error('Could not load the dashboard file.');
+        }
+      }
+      
+    } catch (error) {
+      console.error('Error loading dashboard:', error);
+      setLoadError(`Failed to load dashboard: ${error.message}`);
+    } finally {
+      setLoadingExistingDashboard(false);
+    }
+  };
 
   const logsContainerRef = useRef(null);
   const lastViewRef = useRef(null);
@@ -3622,10 +3703,37 @@ const DashboardEditor = () => {
           }}
         >
           <Toolbar>
+            <IconButton 
+              color="inherit" 
+              onClick={() => navigate("/dashboard")}
+              sx={{ mr: 2 }}
+            >
+              <ArrowLeft size={20} />
+            </IconButton>
             <Typography variant="h6" sx={{ flexGrow: 1 }}>
               Dashboard Editor
+              {loadingExistingDashboard && (
+                <Box component="span" sx={{ ml: 2, display: 'inline-flex', alignItems: 'center', gap: 1 }}>
+                  <CircularProgress size={16} />
+                  Loading...
+                </Box>
+              )}
+              {loadError && (
+                <Box component="span" sx={{ ml: 2, color: 'error.main', fontSize: '0.875rem' }}>
+                  {loadError}
+                </Box>
+              )}
             </Typography>
 
+
+            <IconButton 
+              color="inherit" 
+              onClick={() => setSaveDialogOpen(true)}
+              sx={{ mr: 2 }}
+            >
+              <Save size={20} />
+            </IconButton>
+            
             <Button
               color="inherit"
               onClick={handleMenuClick}
@@ -3634,6 +3742,7 @@ const DashboardEditor = () => {
             >
               File
             </Button>
+
             <Menu
               anchorEl={anchorEl}
               open={Boolean(anchorEl)}
@@ -4140,6 +4249,54 @@ const DashboardEditor = () => {
           </Box>
         </Box>
       </Box>
+      
+      <SaveDialog
+        open={saveDialogOpen}
+        onClose={() => setSaveDialogOpen(false)}
+        existingDashboard={existingDashboard}
+        onSave={(formData) => {
+          setCurrentFileName(formData.fileName);
+          
+          // If this is the final save with Firestore ID, navigate back to dashboard
+          if (formData.firestoreId) {
+            console.log("Dashboard saved successfully to Firestore:", formData);
+            // Navigate back to dashboard with success data
+            navigate("/dashboard", { 
+              state: { 
+                savedDashboard: formData,
+                showSuccess: true,
+                isUpdate: existingDashboard ? true : false
+              } 
+            });
+            return null; // No need to return data for final save
+          }
+          
+          // Get the current dashboard data from the paper for initial save
+          if (paperRef.current) {
+            const str = paperRef.current.model.toJSON();
+            const dashboardData = {
+              graph: str,
+              metadata: formData,
+              timestamp: new Date().toISOString(),
+              version: existingDashboard ? (parseFloat(existingDashboard.version || "1.0") + 0.1).toFixed(1) : "1.0",
+              isUpdate: existingDashboard ? true : false,
+              originalId: existingDashboard?.id || null
+            };
+            
+            console.log("Saving dashboard with data:", formData);
+            console.log("Dashboard content:", dashboardData);
+            console.log("Paper model JSON:", str);
+            console.log("Is update:", existingDashboard ? true : false);
+            
+            // Return the dashboard data for upload
+            return dashboardData;
+          }
+          
+          return null;
+        }}
+        currentFileName={currentFileName}
+        userId={user?.uid || user?.email || ""}
+      />
     </>
   );
 };
