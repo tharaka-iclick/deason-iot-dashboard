@@ -10,11 +10,11 @@ class MotorPump extends joint.dia.Element {
         root: {
           magnetSelector: "body",
         },
-        body: {
-          refWidth: "100%",
-          refHeight: "100%",
-          fill: "none",
-        },
+        // body: {
+        //   refWidth: "100%",
+        //   refHeight: "100%",
+        //   fill: "none",
+        // },
       },
       ports: {
         groups: {
