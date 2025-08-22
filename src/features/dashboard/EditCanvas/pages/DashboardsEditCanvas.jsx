@@ -49,10 +49,6 @@ import ACFan from "../../../WidgetSVG/ACFan";
 import VatAgitatorMixser from "../../../WidgetSVG/VatAgitatorMixser";
 import VatAgitatorLevel from "../../../WidgetSVG/VatAgitatorLevel";
 
-
-
-
-
 import CoolingPlate from "../../../Widgets/CoolingPlate";
 import MotorPump from "../../../Widgets/MotorPump";
 import IceBank from "../../../Widgets/IceBank";
@@ -94,25 +90,65 @@ class Pipe extends joint.dia.Link {
         liquid: {
           connection: true,
           stroke: LIQUID_COLOR,
-          strokeWidth: 10,
+          strokeWidth: 20,
           strokeLinejoin: "round",
           strokeLinecap: "square",
-          strokeDasharray: "10,20",
+          strokeDasharray: "18,20",
         },
         line: {
           connection: true,
-          stroke: "#eee",
-          strokeWidth: 10,
+          stroke: LIQUID_COLOR,
+          strokeWidth: 20,
           strokeLinejoin: "round",
           strokeLinecap: "round",
         },
         outline: {
           connection: true,
           stroke: "#444",
-          strokeWidth: 16,
+          strokeWidth: 32,
           strokeLinejoin: "round",
           strokeLinecap: "round",
         },
+        staticDots1: {
+          connection: true,
+          stroke: "rgba(255,255,255,0.5)",
+          strokeWidth: 10,
+          strokeLinecap: "round",
+          strokeLinejoin: "round",
+          strokeDasharray: "1,15,0.5,20,1.5,25",
+          fill: "none",
+          transform: "translate(0,-4)",
+        },
+        staticDots2: {
+          connection: true,
+          stroke: "rgba(255,255,255,0.4)",
+          strokeWidth: 7,
+          strokeLinecap: "round",
+          strokeLinejoin: "round",
+          strokeDasharray: "0.8,18,2,22,0.5,16",
+          fill: "none",
+          transform: "translate(0,3)",
+        },
+        staticDots3: {
+          connection: true,
+          stroke: "rgba(255,255,255,0.2)",
+          strokeWidth: 12,
+          strokeLinecap: "round",
+          strokeLinejoin: "round",
+          strokeDasharray: "0.3,12,1,28,0.8,14",
+          fill: "none",
+          transform: "translate(-2,0)",
+        },
+        // staticDots4: {
+        //   connection: true,
+        //   stroke: "rgba(255,255,255,0.6)",
+        //   strokeWidth: 10,
+        //   strokeLinecap: "round",
+        //   strokeLinejoin: "round",
+        //   strokeDasharray: "0.5,20,1.5,16,0.3,24",
+        //   fill: "none",
+        //   transform: "translate(2,-1)",
+        // },
       },
     };
   }
@@ -122,6 +158,10 @@ class Pipe extends joint.dia.Link {
             <path @selector="outline" fill="none"/>
             <path @selector="line" fill="none"/>
             <path @selector="liquid" fill="none"/>
+            <path @selector="staticDots1" fill="none"/>
+            <path @selector="staticDots2" fill="none"/>
+            <path @selector="staticDots3" fill="none"/>
+            <path @selector="staticDots4" fill="none"/>
         `;
   }
 }
@@ -133,7 +173,7 @@ const PipeView = joint.dia.LinkView.extend({
 
   initFlag: [...joint.dia.LinkView.prototype.initFlag, FLOW_FLAG],
 
-  flowAnimation: null,
+  flowAnimations: null,
 
   confirmUpdate(...args) {
     let flags = joint.dia.LinkView.prototype.confirmUpdate.call(this, ...args);
@@ -144,50 +184,65 @@ const PipeView = joint.dia.LinkView.extend({
     return flags;
   },
 
-  getFlowAnimation() {
-    let { flowAnimation } = this;
-    if (flowAnimation) return flowAnimation;
-    // const [liquidEl] = this.findBySelector("liquid");
+  getFlowAnimations() {
+    if (this.flowAnimations) return this.flowAnimations;
 
-    const liquidEl =
-      this.findBySelector("liquid")[0] ||
-      this.el.querySelector('[joint-selector="liquid"]') ||
-      this.el.querySelector('path[selector="liquid"]');
+    this.flowAnimations = {};
 
-    console.log("liquidEl:", liquidEl);
-    // stroke-dashoffset = sum(stroke-dasharray) * n;
-    // 90 = 10 + 20 + 10 + 20 + 10 + 20
+    // Get all elements that should have the liquid animation
+    const animatedElements = [
+      { selector: "liquid", duration: 1000, offset: 90 },
+      { selector: "staticDots1", duration: 1200, offset: 60 },
+      { selector: "staticDots2", duration: 1400, offset: 70 },
+      { selector: "staticDots3", duration: 1100, offset: 55 },
+      { selector: "staticDots4", duration: 1300, offset: 65 },
+    ];
 
-    if (!liquidEl) {
-      console.error(
-        "liquidEl element not found! Available elements:",
-        this.el.innerHTML
-      );
-      return null;
-    }
-    const keyframes = { strokeDashoffset: [90, 0] };
-    flowAnimation = liquidEl.animate(keyframes, {
-      fill: "forwards",
-      duration: 1000,
-      iterations: Infinity,
-      easing: "linear",
+    animatedElements.forEach(({ selector, duration, offset }) => {
+      const element =
+        this.findBySelector(selector)[0] ||
+        this.el.querySelector(`[joint-selector="${selector}"]`) ||
+        this.el.querySelector(`path[selector="${selector}"]`);
+
+      if (element) {
+        // element.style.strokeDasharray = "2 5";
+        // element.style.strokeLinecap = "round";
+
+        const keyframes = { strokeDashoffset: [offset, 0] };
+        const animation = element.animate(keyframes, {
+          fill: "forwards",
+          duration: duration,
+          iterations: Infinity,
+          easing: "linear",
+        });
+
+        this.flowAnimations[selector] = animation;
+      } else {
+        console.warn(`Element with selector "${selector}" not found`);
+      }
     });
-    this.flowAnimation = flowAnimation;
-    return flowAnimation;
+
+    return this.flowAnimations;
   },
 
   updateFlow() {
     const flow = this.model.get("flow");
-    if (flow) {
-      this.getFlowAnimation().play();
-    } else {
-      this.getFlowAnimation().pause();
-    }
+    const animations = this.getFlowAnimations();
+
+    Object.values(animations).forEach((animation) => {
+      if (flow) {
+        animation.play();
+      } else {
+        animation.pause();
+      }
+    });
   },
 
   onRemove() {
-    if (this.flowAnimation) {
-      this.flowAnimation.cancel();
+    if (this.flowAnimations) {
+      Object.values(this.flowAnimations).forEach((animation) => {
+        animation.cancel();
+      });
     }
     joint.dia.LinkView.prototype.onRemove.apply(this, arguments);
   },
@@ -204,11 +259,11 @@ class HeatPump extends joint.dia.Element {
         root: {
           magnetSelector: "body",
         },
-        body: {
-          refWidth: "100%",
-          refHeight: "100%",
-          fill: "none",
-        },
+        // body: {
+        //   refWidth: "100%",
+        //   refHeight: "100%",
+        //   fill: "none",
+        // },
       },
       ports: {
         groups: {
@@ -694,7 +749,7 @@ class TemplateImage extends joint.dia.Element {
     this.stopAnimation(); // Stop any previous animation
     this.attr("image/data-animated", true);
     this.attr("image/class", "tank-volume-up");
-    
+
     return this;
   }
   preinitialize() {
@@ -772,18 +827,18 @@ class TemplateImage extends joint.dia.Element {
   }
 
   scaleHeight(percentage) {
-    const originalHeight = this.get('originalHeight') || this.size().height;
-    if (!this.get('originalHeight')) {
-      this.set('originalHeight', originalHeight);
+    const originalHeight = this.get("originalHeight") || this.size().height;
+    if (!this.get("originalHeight")) {
+      this.set("originalHeight", originalHeight);
     }
     const newHeight = (originalHeight * percentage) / 100;
     const currentPos = this.position();
     const currentHeight = this.size().height;
     const currentWidth = this.size().width;
-    
+
     // Calculate new Y position to maintain bottom anchor point
     const newY = currentPos.y + (currentHeight - newHeight);
-    
+
     // Keep the same width, only change height
     this.resize(currentWidth, newHeight);
     this.position(currentPos.x, newY);
@@ -792,15 +847,18 @@ class TemplateImage extends joint.dia.Element {
 
   heightAnimation() {
     // Add a custom CSS property for the scale value
-    document.documentElement.style.setProperty('--scale-height', this.get('scaleY') || '0.2');
+    document.documentElement.style.setProperty(
+      "--scale-height",
+      this.get("scaleY") || "0.2"
+    );
     this.attr("image/data-animated", true);
     this.attr("image/class", "height-scale");
     return this;
   }
 
   setScale(value) {
-    this.set('scaleY', value);
-    document.documentElement.style.setProperty('--scale-height', value);
+    this.set("scaleY", value);
+    document.documentElement.style.setProperty("--scale-height", value);
     return this;
   }
 }
@@ -839,9 +897,10 @@ const DashboardEditor = () => {
   const [elements, setElements] = useState({});
 
   const [heightScale, setHeightScale] = useState(100); // Add this state
-const setInspectorContainer = (newValue) => {
-  inspectorContainerRef.current = newValue;
-};
+
+  const setInspectorContainer = (newValue) => {
+    inspectorContainerRef.current = newValue;
+  };
   const handleStartAnimation = () => {
     if (!selectedCell) return;
 
@@ -855,10 +914,10 @@ const setInspectorContainer = (newValue) => {
       case "flow":
         selectedCell.flowAnimation();
         break;
-              case 'tank-volume-up':
+      case "tank-volume-up":
         selectedCell.tankVolumeUpAnimation();
         break;
-      case 'height-scale':
+      case "height-scale":
         selectedCell.heightAnimation();
         selectedCell.scaleHeight(heightScale);
         break;
@@ -928,6 +987,13 @@ const setInspectorContainer = (newValue) => {
 
     const payload = data || {};
 
+    const cellId = getCellId(cell);
+
+    // Clean up any existing subscription
+    if (deviceSubscriptions.current.has(cellId)) {
+      deviceSubscriptions.current.get(cellId)();
+    }
+
     console.log("payload01", data);
     console.log("asas selectedEUI", selectedEUI);
     console.log("asas selectedDevice", selectedDevice);
@@ -944,7 +1010,7 @@ const setInspectorContainer = (newValue) => {
               const modelName = formatKey(selectedValue) || "Device";
               if (typeof value === "number") {
                 // Format numbers with 2 decimal places
-                displayText = `${modelName}: ${value.toFixed(2)}`;
+                displayText = `${modelName}: ${value}`;
               } else if (typeof value === "boolean") {
                 // Convert boolean to "On"/"Off"
                 displayText = `${modelName}: ${value ? "On" : "Off"}`;
@@ -958,33 +1024,35 @@ const setInspectorContainer = (newValue) => {
               cell.attr("label/text", displayText);
             } catch (labelError) {
               console.error("Error formatting label:", labelError);
-              cell.attr("label/text", "Error: Invalid Value");
+              // cell.attr("label/text", "Error: Invalid Value");
             }
 
-      
-            if (typeof value === "number"&&selectedValue== "level") {
+            if (typeof value === "number" && selectedValue == "level") {
               // Scale the tank height based on the value
-             const tankPercentage = (value / 100) * 100; // Assuming value is 0-100
-             // cell.scaleHeight(tankPercentage);
-              const scaleValue = (0.2 + (value / 100) * 0.8);
-             // Update both height and CSS scale
+              const tankPercentage = (value / 100) * 100; // Assuming value is 0-100
+              // cell.scaleHeight(tankPercentage);
+              const scaleValue = 0.2 + (value / 100) * 0.8;
+              // Update both height and CSS scale
               updateElementAttributes(selectedElement, {
-                        waterLevel: scaleValue,
-                      })
-          
-            //  cell.setScale(scaleValue);
-            //  // Add animation effect
-            //  cell.attr("image/data-animated", true);
-            //  cell.attr("image/class", "height-scale");
+                waterLevel: scaleValue,
+              });
 
-            //  // Update color based on level
-            //  const normalizedValue = Math.min(Math.max(value / 100, 0), 1);
-            //  const hue = (1 - normalizedValue) * 120;
-            //  cell.attr("body/fill", `hsl(${hue}, 100%, 80%)`);
-            }
-         else   if (value == "open") {
+              //  cell.setScale(scaleValue);
+              //  // Add animation effect
+              //  cell.attr("image/data-animated", true);
+              //  cell.attr("image/class", "height-scale");
 
-             turnOn(selectedElement);
+              //  // Update color based on level
+              //  const normalizedValue = Math.min(Math.max(value / 100, 0), 1);
+              //  const hue = (1 - normalizedValue) * 120;
+              //  cell.attr("body/fill", `hsl(${hue}, 100%, 80%)`);
+            } else if (selectedValue == "magnet_status" && value == "open") {
+              const isOpen = value === "open";
+              updateElementAttributes(selectedElement, {
+                magnet_status: "open",
+              });
+            } else if (value == "open") {
+              turnOn(selectedElement);
               //  selectedCell.rotate();
               //  const imageEl = document.querySelector(
               //    `[model-id="${selectedCell.id}"] image`
@@ -992,77 +1060,77 @@ const setInspectorContainer = (newValue) => {
               //  if (imageEl) {
               //    imageEl.style.animationDuration = `${2 / animationSpeed}s`;
               //  }
-             } 
-             
-                 else   if (selectedValue== "running_status"&& value == "on") {
-                   turnOn(selectedElement);
-    selectedCell.tankVolumeUpAnimation();
-    const imageEl = document.querySelector(
-                 `[model-id="${selectedCell.id}"] image`
-               );
-               if (imageEl) {
-                 imageEl.style.animationDuration = `${2 / animationSpeed}s`;
-               }
-                 }
-                                  else   if (selectedValue== "agi_mixer"&& value == "on") {
-                                                  updateElementAttributes(selectedElement, {
-                        ...elementData,
-                        agitatorSpeed: 1,
-                      });
-    // selectedCell.startAnimation("rotate3d");
-    // const imageEl = document.querySelector(
-    //              `[model-id="${selectedCell.id}"] image`
-    //            );
-    //            if (imageEl) {
-    //              imageEl.style.animationDuration = `${2 / animationSpeed}s`;
-    //            }
-                 }
-           else {
-             try {          
-                     turnOff(selectedElement);
-                                     updateElementAttributes(selectedElement, {
-                        ...elementData,
-                        agitatorSpeed: 0,
-                      });
-               if (selectedCell) {
-                 selectedCell.stopAnimation();
-               }
-             } catch (error) {
-               console.error("Error stopping cell animation:", error);
-               // Attempt to reset animation state
-               try {
-                 if (selectedCell) {
-                   selectedCell.attr("image/data-animated", false);
-                   selectedCell.attr("image/class", "");
-                 }
-               } catch (recoveryError) {
-                 console.error("Failed to reset animation state:", recoveryError);
-               }
-             }
-           }
-           if (typeof value === "number") {
-             const range = deviceModels[cell.prop("custom/deviceModel")]
-               ?.range || [0, 100];
-             const normalizedValue = Math.min(
-               Math.max((value - range[0]) / (range[1] - range[0]), 0),
-               1
-             );
-             console.log("normalizedValue", normalizedValue);
-             const hue = (1 - normalizedValue) * 120; // Green (0) to Red (120)
-             cell.attr("body/fill", `hsl(${hue}, 100%, 80%)`);
-           } else {
-             cell.attr("body/fill", "#e0e0e0");
-           }
-         }
-       } catch (error) {
-         console.error("Error updating cell display:", error);
-         cell.attr("label/text", "Error: Update Failed");
-       }
-    }
-  );
+            } else if (selectedValue == "running_status" && value == "on") {
+              turnOn(selectedElement);
+              selectedCell.tankVolumeUpAnimation();
+              const imageEl = document.querySelector(
+                `[model-id="${selectedCell.id}"] image`
+              );
+              if (imageEl) {
+                imageEl.style.animationDuration = `${2 / animationSpeed}s`;
+              }
+            } else if (selectedValue == "agi_mixer" && value == "on") {
+              updateElementAttributes(selectedElement, {
+                ...elementData,
+                agitatorSpeed: 100,
+              });
+              // selectedCell.startAnimation("rotate3d");
+              // const imageEl = document.querySelector(
+              //              `[model-id="${selectedCell.id}"] image`
+              //            );
+              //            if (imageEl) {
+              //              imageEl.style.animationDuration = `${2 / animationSpeed}s`;
+              //            }
+            } else {
+              try {
+                turnOff(selectedElement);
+                updateElementAttributes(selectedElement, {
+                  ...elementData,
+                  agitatorSpeed: 0,
+                });
+                if (selectedCell) {
+                  selectedCell.stopAnimation();
+                }
+              } catch (error) {
+                console.error("Error stopping cell animation:", error);
+                // Attempt to reset animation state
+                try {
+                  if (selectedCell) {
+                    selectedCell.attr("image/data-animated", false);
+                    selectedCell.attr("image/class", "");
+                  }
+                } catch (recoveryError) {
+                  console.error(
+                    "Failed to reset animation state:",
+                    recoveryError
+                  );
+                }
+              }
+            }
+            if (typeof value === "number") {
+              const range = deviceModels[cell.prop("custom/deviceModel")]
+                ?.range || [0, 100];
+              const normalizedValue = Math.min(
+                Math.max((value - range[0]) / (range[1] - range[0]), 0),
+                1
+              );
+              console.log("normalizedValue", normalizedValue);
+              const hue = (1 - normalizedValue) * 120; // Green (0) to Red (120)
+              cell.attr("body/fill", `hsl(${hue}, 100%, 80%)`);
+            } else {
+              cell.attr("body/fill", "none");
+            }
+          }
+        } catch (error) {
+          console.error("Error updating cell display:", error);
+          cell.attr("label/text", "Error: Update Failed");
+        }
+      }
+    );
 
-  unsubscribe();
+    unsubscribe();
   };
+
   const subscribeCellToDevice = (cell, eui, deviceId, deviceModel) => {
     const cellId = getCellId(cell);
 
@@ -1081,13 +1149,48 @@ const setInspectorContainer = (newValue) => {
             setPayload(data);
 
             const payloadKeys = Object.keys(data || {});
+            const selectedValue = payloadKeys;
+
             if (payloadKeys.length > 0) {
               setAvailableValues(payloadKeys);
               console.log("payloadKeys", payloadKeys);
               console.log("selectedValuew", selectedValue);
               if (!selectedValue || !payloadKeys.includes(selectedValue)) {
-                setSelectedValue(payloadKeys);
+                setSelectedValue(payloadKeys[0]);
               }
+            }
+            const sensorDataToUse = payloadKeys[0] || selectedValue;
+
+            console.log("sensorDataToUse", sensorDataToUse);
+            if (sensorDataToUse) {
+              const unsubscribe = listenForSensoreData(
+                eui,
+                deviceId,
+                sensorDataToUse,
+                (value) => {
+                  if (typeof value !== "undefined") {
+                    const modelName = sensorDataToUse || "Device";
+                    cell.attr("label/text", `${modelName}: ${value}`);
+
+                    if (typeof value === "number") {
+                      const range = deviceModels[deviceModel]?.range || [
+                        0, 100,
+                      ];
+                      const normalizedValue = Math.min(
+                        Math.max((value - range[0]) / (range[1] - range[0]), 0),
+                        1
+                      );
+                      const hue = (1 - normalizedValue) * 120;
+                      cell.attr("body/fill", `hsl(${hue}, 100%, 80%)`);
+                    } else {
+                      cell.attr("body/fill", "#e0e0e0");
+                    }
+                  }
+                }
+              );
+
+              // Store the unsubscribe function
+              deviceSubscriptions.current.set(cellId, unsubscribe);
             }
             //updateCellDisplay(cell, data);
             // Do something with the payload
@@ -1105,6 +1208,7 @@ const setInspectorContainer = (newValue) => {
       cell.prop("custom/deviceModel", deviceModel);
     }
   };
+
   const unsubscribeCellFromDevice = (cellId) => {
     if (deviceSubscriptions.current.has(cellId)) {
       deviceSubscriptions.current.get(cellId)();
@@ -1282,6 +1386,17 @@ const setInspectorContainer = (newValue) => {
         setCurrentFileHandle(fileHandle);
         setCurrentFileName(fileHandle.name);
         setCurrentCmdId(null);
+
+        paperRef.current.model.getCells().forEach((cell) => {
+          if (cell.prop("custom/deviceEUI")) {
+            subscribeCellToDevice(
+              cell,
+              cell.prop("custom/deviceEUI"),
+              cell.prop("custom/deviceID"),
+              cell.prop("custom/deviceModel")
+            );
+          }
+        });
       };
       fileReader.readAsText(file);
     } catch (error) {
@@ -1502,14 +1617,13 @@ const setInspectorContainer = (newValue) => {
             device: { label: "Device Settings", index: 4 },
             actions: { label: "Actions", index: 5 },
           },
-          groupState:
-            {
-              text: { open: true },
-              appearance: { open: true },
-              size: { open: true },
-              device: { open: true },
-              actions: { open: true },
-            },
+          groupState: {
+            text: { open: true },
+            appearance: { open: true },
+            size: { open: true },
+            device: { open: true },
+            actions: { open: true },
+          },
         }
       );
     });
@@ -1527,18 +1641,18 @@ const setInspectorContainer = (newValue) => {
       elementView.addTools(
         new dia.ToolsView({
           tools: [
-            // new joint.elementTools.Boundary({
-            //   padding: 10,
-            //   useModelGeometry: true,
-            //   attributes: {
-            //     fill: "#4a7bcb",
-            //     "fill-opacity": 0.1,
-            //     stroke: "#4a7bcb",
-            //     "stroke-width": 2,
-            //     "stroke-dasharray": "none",
-            //     "pointer-events": "none",
-            //   },
-            // }),
+            new joint.elementTools.Boundary({
+              // padding: 10,
+              useModelGeometry: true,
+              attributes: {
+                fill: "#4a7bcb",
+                "fill-opacity": 0.1,
+                stroke: "#4a7bcb",
+                "stroke-width": 2,
+                "stroke-dasharray": "none",
+                "pointer-events": "none",
+              },
+            }),
             new joint.elementTools.Remove({
               useModelGeometry: true,
               x: -10,
@@ -1550,9 +1664,9 @@ const setInspectorContainer = (newValue) => {
       );
     });
 
-    // paper.on("element:pointerclick", (elementView) => {
-    //   elementView.removeTools();
-    // });
+    paper.on("element:pointerclick", (elementView) => {
+      elementView.removeTools();
+    });
 
     let currentLinkToolsView;
 
@@ -1896,24 +2010,22 @@ const setInspectorContainer = (newValue) => {
         size: { width: 80, height: 60 },
         cloneSize: { width: 250, height: 200 },
         attrs: {},
-      }
-      ,
+      },
       {
         type: "custom.TemplateImage",
         svg: VatAgitatorMixser,
         size: { width: 80, height: 60 },
-        cloneSize: {  width: 80, height: 120},
+        cloneSize: { width: 80, height: 120 },
         attrs: {},
       },
       {
         type: "custom.TemplateImage",
         svg: VatAgitatorLevel,
         size: { width: 80, height: 60 },
-        cloneSize: {  width: 80, height: 120},
+        cloneSize: { width: 80, height: 120 },
         attrs: {},
       },
     ];
-    
 
     const stencilPorts = [
       {
@@ -3076,9 +3188,10 @@ const setInspectorContainer = (newValue) => {
     }
     const defaultAttributes = {
       isRunning: false,
-      power: 0.5,
+      power: 1,
       waterLevel: 0.5,
       agitatorSpeed: 0.2,
+      magnet_status: "close",
     };
 
     if (element instanceof HeatPump) {
@@ -3086,6 +3199,8 @@ const setInspectorContainer = (newValue) => {
     } else if (element instanceof VatWithAgitator) {
       defaultAttributes.waterLevel = 0.5;
       defaultAttributes.agitatorSpeed = 0.2;
+    } else if (element instanceof MotorPump) {
+      defaultAttributes.magnet_status = "close";
     }
 
     setElements((prev) => ({
@@ -3121,7 +3236,7 @@ const setInspectorContainer = (newValue) => {
         const element = updated[id].element;
         console.log("[React] JointJS element:", element);
 
-        if (attributes.isRunning !== undefined) {
+        if (attributes.power !== undefined) {
           console.log("[React] Updating power to:", attributes.power);
           element.set("power", attributes.power);
           element.attr(
@@ -3186,6 +3301,50 @@ const setInspectorContainer = (newValue) => {
                 }
           );
         }
+
+        if (attributes.magnet_status !== undefined) {
+          console.log(
+            "[React] Updating magnet_status to:",
+            attributes.magnet_status
+          );
+          element.set("magnet_status", attributes.magnet_status);
+
+          const isOpen = attributes.magnet_status === "open";
+          console.log("[React] Updating magnet_status isOpen:", isOpen);
+
+          if (isOpen) {
+            // Define only OPEN color scheme
+            const openColors = {
+              mainBody: {
+                type: "linearGradient",
+                stops: [
+                  { offset: "0%", color: "#078C00" },
+                  { offset: "100%", color: "#C7FFC4" },
+                ],
+              },
+              panel: {
+                type: "linearGradient",
+                stops: [
+                  { offset: "15.3846%", color: "#C7FFC4" },
+                  { offset: "100%", color: "#078C00" },
+                ],
+                attrs: { x1: "50%", y1: "100%", x2: "50%", y2: "0%" },
+              },
+            };
+
+            // Apply only when OPEN
+            element.attr("mainBody/fill", openColors.mainBody);
+
+            for (let i = 1; i <= 10; i++) {
+              element.attr(`controlPanel${i}/fill`, openColors.panel);
+            }
+
+            element.attr("topComponent/fill", openColors.panel);
+            element.attr("rightComponent/fill", openColors.panel);
+            element.attr("leftFoot/fill", openColors.panel);
+            element.attr("rightFoot/fill", openColors.panel);
+          }
+        }
       }
 
       return updated;
@@ -3207,6 +3366,7 @@ const setInspectorContainer = (newValue) => {
       isRunning: isRunning,
     });
   };
+
   const toggleRunning = (id) => {
     console.log("[React] toggleRunning called for id:", id);
     const current = elements[id]?.isRunning || false;
@@ -3219,21 +3379,21 @@ const setInspectorContainer = (newValue) => {
     });
   };
 
-const turnOn = (id) => {
+  const turnOn = (id) => {
     console.log("[React] turnOn called for id:", id);
     updateElementAttributes(id, {
-        isRunning: true,
-        power: 1,
+      isRunning: true,
+      power: 1,
     });
-};
+  };
 
-const turnOff = (id) => {
+  const turnOff = (id) => {
     console.log("[React] turnOff called for id:", id);
     updateElementAttributes(id, {
-        isRunning: false,
-        power: 0,
+      isRunning: false,
+      power: 0,
     });
-};
+  };
 
   const resetElement = (id) => {
     if (elements[id]) {
@@ -3667,37 +3827,37 @@ const turnOff = (id) => {
                   </FormControl>
                 )}
 
-      <FormControl fullWidth sx={{ mb: 2, mt: 1 }}>
-        <InputLabel>Animation Type</InputLabel>
-        <Select
-          value={animationType}
-          onChange={handleAnimationTypeChange}
-          label="Animation Type"
-        >
-          <MenuItem value="pulse">Pulse</MenuItem>
-          <MenuItem value="rotate">Rotate</MenuItem>
-          <MenuItem value="rotate3d">Rotate 3D</MenuItem>
-          <MenuItem value="bounce">Bounce</MenuItem>
-          <MenuItem value="flow">Flow</MenuItem>
-          <MenuItem value="tank-volume-up">Tank Volume Up</MenuItem>
-          <MenuItem value="height-scale">Height Scale</MenuItem>
-        </Select>
-      </FormControl>
+                <FormControl fullWidth sx={{ mb: 2, mt: 1 }}>
+                  <InputLabel>Animation Type</InputLabel>
+                  <Select
+                    value={animationType}
+                    onChange={handleAnimationTypeChange}
+                    label="Animation Type"
+                  >
+                    <MenuItem value="pulse">Pulse</MenuItem>
+                    <MenuItem value="rotate">Rotate</MenuItem>
+                    <MenuItem value="rotate3d">Rotate 3D</MenuItem>
+                    <MenuItem value="bounce">Bounce</MenuItem>
+                    <MenuItem value="flow">Flow</MenuItem>
+                    <MenuItem value="tank-volume-up">Tank Volume Up</MenuItem>
+                    <MenuItem value="height-scale">Height Scale</MenuItem>
+                  </Select>
+                </FormControl>
 
-      {animationType === 'height-scale' && (
-        <Box sx={{ mt: 2 }}>
-          <Typography variant="body2">Height Scale (%)</Typography>
-          <Slider
-            value={heightScale}
-            onChange={handleHeightChange}
-            min={0}
-            max={100}
-            step={1}
-            valueLabelDisplay="auto"
-            sx={{ mt: 1 }}
-          />
-        </Box>
-      )}
+                {animationType === "height-scale" && (
+                  <Box sx={{ mt: 2 }}>
+                    <Typography variant="body2">Height Scale (%)</Typography>
+                    <Slider
+                      value={heightScale}
+                      onChange={handleHeightChange}
+                      min={0}
+                      max={100}
+                      step={1}
+                      valueLabelDisplay="auto"
+                      sx={{ mt: 1 }}
+                    />
+                  </Box>
+                )}
 
                 {/* {selectedDevice && Object.keys(payload).length > 0 && (
                   <FormControl component="fieldset">
@@ -3758,10 +3918,7 @@ const turnOff = (id) => {
                           <Slider
                             value={elementData.power}
                             onChange={(e, newValue) =>
-                            
                               handlePowerChange(selectedElement, newValue)
-                            
-                           
                             }
                             min={0}
                             max={1}
