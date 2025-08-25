@@ -7,14 +7,17 @@ class CoolingPlate extends joint.dia.Element {
       type: "CoolingPlate",
       size: { width: 621, height: 812 },
       power: 0,
+      temperature: 0,
+      selectedValue: "", // Add this to store the selected value type
+      deviceData: {}, // Add this to store the actual device data
       attrs: {
         root: {
           magnetSelector: "body",
         },
         body: {
-          refWidth: "100%",
-          refHeight: "100%",
-          fill: "none",
+          // refWidth: "100%",
+          // refHeight: "100%",
+          // fill: "none",
         },
       },
       ports: {
@@ -148,6 +151,8 @@ class CoolingPlate extends joint.dia.Element {
       <g @selector="controlPanelGroup" filter="url(#filter0_d_2026_4)">
         <rect @selector="controlPanel"/>
         <rect @selector="controlPanelBorder"/>
+        <text @selector="tempLevelDisplayLable"/>
+        <text @selector="controlPanelTempText"/>
       </g>
       <rect @selector="leftFoot"/>
       <rect @selector="rightFoot"/>
@@ -165,7 +170,13 @@ class CoolingPlate extends joint.dia.Element {
   initialize() {
     joint.dia.Element.prototype.initialize.apply(this, arguments);
     this.updateAttrs();
+    this.updateTemperatureDisplay(); // Add this line
     this.on("change:size", this.updateAttrs, this);
+    this.on(
+      "change:selectedValue change:deviceData change:temperature",
+      this.updateTemperatureDisplay,
+      this
+    ); // Add this line
   }
 
   updateAttrs() {
@@ -530,6 +541,80 @@ class CoolingPlate extends joint.dia.Element {
       y: -6.1171 * portScale,
       strokeWidth: 4 * portScale,
     });
+
+    // Update the temperature display after scaling changes
+    this.updateTemperatureDisplay();
+  }
+
+  // NEW METHOD: Update temperature display
+  updateTemperatureDisplay() {
+    const size = this.get("size");
+    const power = this.get("power") || 0;
+    const scaleX = size.width / 621;
+    const scaleY = size.height / 812;
+    const minScale = Math.min(scaleX, scaleY);
+
+    const selectedValue = this.get("selectedValue");
+    const deviceData = this.get("deviceData") || {};
+    const temperature = this.get("temperature") || 0;
+
+    let displayValue;
+    let displayText;
+    let displayLabel; // New variable for label only
+    let displayValueOnly; // New variable for value only
+
+    if (selectedValue && deviceData[selectedValue] !== undefined) {
+      // If a specific value is selected and exists in device data, use it
+      displayValue = deviceData[selectedValue];
+      displayText = `${selectedValue.toUpperCase()}:\n\n    ${displayValue}`;
+      displayLabel = `${selectedValue.toUpperCase()}:`; // Extract label only
+      displayValueOnly = displayValue; // Store value only
+    } else if (selectedValue === "temperature" && temperature !== undefined) {
+      // If temperature is specifically selected, use the temperature property
+      displayValue = temperature;
+      displayText = `TEMPERATURE:\n\n   ${displayValue}`;
+      displayLabel = "TEMPERATURE:"; // Set label only
+      displayValueOnly = displayValue; // Store value only
+    } else {
+      // Default fallback
+      displayValue = temperature;
+      displayText = `TEMPERATURE:\n\n   ${displayValue}`;
+      displayLabel = "TEMPERATURE:"; // Set label only
+      displayValueOnly = displayValue; // Store value only
+    }
+
+    // Format the display value (you can customize this formatting)
+    let formattedValueOnly = displayValueOnly; // Formatted value only
+    if (typeof displayValueOnly === "number") {
+      formattedValueOnly = displayValueOnly.toFixed(1);
+    }
+
+    // Add unit if it's temperature
+    if (selectedValue === "temperature") {
+      formattedValueOnly += "°C";
+    }
+
+    // Update the label (tempLevelDisplayLable)
+    this.attr("tempLevelDisplayLable", {
+      x: 145 * scaleX,
+      y: 150 * scaleY,
+      text: displayLabel, // Show only the label (e.g., "TEMPERATURE:")
+      fontSize: 30 * minScale, // Match the font size
+      fontFamily: "Arial",
+      fill: "#333",
+      fontWeight: "bold",
+    });
+
+    // Update the value display (controlPanelTempText)
+    this.attr("controlPanelTempText", {
+      x: 230 * scaleX,
+      y: 190 * scaleY,
+      text: formattedValueOnly, // Show only the formatted value with unit
+      fontSize: 40 * minScale,
+      fontFamily: "Arial",
+      fill: power ? "#078C00" : "#333",
+      fontWeight: "bold",
+    });
   }
 
   scalePath(pathData, scaleX, scaleY) {
@@ -552,12 +637,114 @@ class CoolingPlate extends joint.dia.Element {
     );
   }
 
+  updatePowerState() {
+    const power = this.get("power") || 0;
+    const color = power ? "#078C00" : "#737373"; // Green when on, gray when off
+
+    // Update container colors based on power state
+    this.attr({
+      controlPanelTempText: {
+        fill: power ? "#078C00" : "#737373", // Green when on, gray when off
+      },
+      container1: {
+        fill: {
+          type: "linearGradient",
+          stops: [
+            { offset: "0%", color: power ? "#078C00" : "#737373" },
+            { offset: "0.259615", color: power ? "#4CAF50" : "#D9D9D9" },
+            { offset: "0.509615", color: power ? "#8BC34A" : "white" },
+            { offset: "0.740385", color: power ? "#4CAF50" : "#D9D9D9" },
+            { offset: "1", color: power ? "#078C00" : "#737373" },
+          ],
+          attrs: { x1: "100%", y1: "50%", x2: "0%", y2: "50%" },
+        },
+      },
+      container2: {
+        fill: {
+          type: "linearGradient",
+          stops: [
+            { offset: "0%", color: power ? "#078C00" : "#737373" },
+            { offset: "0.259615", color: power ? "#4CAF50" : "#D9D9D9" },
+            { offset: "0.509615", color: power ? "#8BC34A" : "white" },
+            { offset: "0.740385", color: power ? "#4CAF50" : "#D9D9D9" },
+            { offset: "1", color: power ? "#078C00" : "#737373" },
+          ],
+          attrs: { x1: "100%", y1: "50%", x2: "0%", y2: "50%" },
+        },
+      },
+      container3: {
+        fill: {
+          type: "linearGradient",
+          stops: [
+            { offset: "0%", color: power ? "#078C00" : "#737373" },
+            { offset: "0.259615", color: power ? "#4CAF50" : "#D9D9D9" },
+            { offset: "0.509615", color: power ? "#8BC34A" : "white" },
+            { offset: "0.740385", color: power ? "#4CAF50" : "#D9D9D9" },
+            { offset: "1", color: power ? "#078C00" : "#737373" },
+          ],
+          attrs: { x1: "100%", y1: "50%", x2: "0%", y2: "50%" },
+        },
+      },
+    });
+  }
+
+  // NEW METHOD: Set selected value and update display
+  setSelectedValue(value) {
+    this.set("selectedValue", value);
+  }
+
+  // NEW METHOD: Update device data and refresh display
+  updateDeviceData(data) {
+    this.set("deviceData", data);
+  }
+
   get power() {
     return this.get("power") || 0;
   }
 
   set power(value) {
     this.set("power", value);
+  }
+
+  get temperature() {
+    return this.get("temperature") || 0;
+  }
+
+  set temperature(value) {
+    this.set("temperature", value);
+  }
+
+  set(key, value, options) {
+    const result = super.set(key, value, options);
+
+    if (typeof key === "object") {
+      if (key.power !== undefined) {
+        this.updatePowerState();
+      }
+      if (
+        key.selectedValue !== undefined ||
+        key.deviceData !== undefined ||
+        key.temperature !== undefined
+      ) {
+        this.updateTemperatureDisplay();
+      }
+    } else if (key === "power") {
+      this.updatePowerState();
+    } else if (
+      key === "selectedValue" ||
+      key === "deviceData" ||
+      key === "temperature"
+    ) {
+      this.updateTemperatureDisplay();
+    }
+
+    return result;
+  }
+
+  togglePower() {
+    const currentPower = this.get("power") || 0;
+    this.set("power", currentPower ? 0 : 1);
+    return this.get("power");
   }
 }
 

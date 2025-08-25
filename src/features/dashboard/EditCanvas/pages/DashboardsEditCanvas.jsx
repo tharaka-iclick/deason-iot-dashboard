@@ -41,7 +41,6 @@ import {
 import * as joint from "@joint/plus";
 import MotorPumpSVG from "../../../WidgetSVG/MotorPumpSVG";
 import HeatPumpSVG from "../../../WidgetSVG/HeatPumpSVG";
-// import CoolingPlate from "../../../WidgetSVG/CoolingPlate";
 import VatAgitator from "../../../WidgetSVG/VatAgitator";
 import Chille from "../../../WidgetSVG/Chiller";
 // import IceBank from "../../../WidgetSVG/IceBank";
@@ -255,6 +254,10 @@ class HeatPump extends joint.dia.Element {
       type: "HeatPump",
       size: { width: 680, height: 396 }, // Default size
       power: 0,
+
+      temperature: 0,
+      selectedValue: "",
+      deviceData: {},
       attrs: {
         root: {
           magnetSelector: "body",
@@ -381,6 +384,7 @@ class HeatPump extends joint.dia.Element {
             <circle @selector="centerCircle"/>
             <path @selector="rotator"/>
             <rect @selector="controlPanel"/>
+            <text @selector="controlPanelTempText"/>
             <rect @selector="controlPanelBorder"/>
             <rect @selector="leftFoot"/>
             <rect @selector="leftFootEnd"/>
@@ -392,7 +396,13 @@ class HeatPump extends joint.dia.Element {
   initialize() {
     joint.dia.Element.prototype.initialize.apply(this, arguments);
     this.updateAttrs();
+    this.updateTemperatureDisplay();
     this.on("change:size", this.updateAttrs, this);
+    this.on(
+      "change:selectedValue change:deviceData change:temperature",
+      this.updateTemperatureDisplay,
+      this
+    );
   }
 
   updateAttrs() {
@@ -610,6 +620,64 @@ class HeatPump extends joint.dia.Element {
     });
   }
 
+  updateTemperatureDisplay() {
+    const size = this.get("size");
+    const scaleX = size.width / 771;
+    const scaleY = size.height / 646;
+    const minScale = Math.min(scaleX, scaleY);
+
+    const selectedValue = this.get("selectedValue");
+    const deviceData = this.get("deviceData") || {};
+    const temperature = this.get("temperature") || 0;
+
+    let displayValue;
+    let displayText;
+
+    if (selectedValue && deviceData[selectedValue] !== undefined) {
+      // If a specific value is selected and exists in device data, use it
+      displayValue = deviceData[selectedValue];
+      displayText = `${displayValue}`;
+    } else if (selectedValue === "temperature" && temperature !== undefined) {
+      // If temperature is specifically selected, use the temperature property
+      displayValue = temperature;
+      displayText = `${displayValue}`;
+    } else {
+      // Default fallback
+      displayValue = temperature;
+      displayText = `${displayValue}`;
+    }
+
+    // Format the display value (you can customize this formatting)
+    if (typeof displayValue === "number") {
+      const formattedValue = displayValue.toFixed(1);
+      if (selectedValue === "temperature") {
+        displayText = displayText.replace(
+          displayValue.toString(),
+          formattedValue + "°C"
+        );
+      } else {
+        displayText = displayText.replace(
+          displayValue.toString(),
+          formattedValue
+        );
+      }
+    } else if (selectedValue === "temperature") {
+      displayText = displayText + "°C";
+    }
+
+    this.attr("controlPanelTempText", {
+      x: 90 * scaleX,
+      y: 170 * scaleY,
+      text: displayText,
+      fontSize: 70 * minScale,
+      fontFamily: "Arial",
+      fill: "#333",
+      fontWeight: "bold",
+      originX: "center",
+      originY: "center",
+    });
+  }
+
   scalePath(pathData, scaleX, scaleY) {
     return pathData.replace(
       /([MLCQAZHV])([^MLCQAZHV]*)/g,
@@ -631,12 +699,51 @@ class HeatPump extends joint.dia.Element {
     );
   }
 
+  setSelectedValue(value) {
+    this.set("selectedValue", value);
+  }
+
+  // NEW METHOD: Update device data and refresh display
+  updateDeviceData(data) {
+    this.set("deviceData", data);
+  }
+
   get power() {
     return this.get("power") || 0;
   }
 
   set power(value) {
     this.set("power", value);
+  }
+
+  get temperature() {
+    return this.get("temperature") || 0;
+  }
+
+  set temperature(value) {
+    this.set("temperature", value);
+  }
+
+  set(key, value, options) {
+    const result = super.set(key, value, options);
+
+    if (typeof key === "object") {
+      if (
+        key.selectedValue !== undefined ||
+        key.deviceData !== undefined ||
+        key.temperature !== undefined
+      ) {
+        this.updateTemperatureDisplay();
+      }
+    } else if (
+      key === "selectedValue" ||
+      key === "deviceData" ||
+      key === "temperature"
+    ) {
+      this.updateTemperatureDisplay();
+    }
+
+    return result;
   }
 }
 const HeatPumpView = joint.dia.ElementView.extend({
@@ -1021,12 +1128,99 @@ const DashboardEditor = () => {
                 // Default case for strings and other types
                 displayText = `${modelName}: ${value}`;
               }
+              if (cell.get("type") === "CoolingPlate") {
+                cell.setSelectedValue(selectedValue);
+                cell.updateDeviceData({ [selectedValue]: value });
+
+                // Also update temperature property if selectedValue is temperature
+                if (selectedValue === "temperature") {
+                  cell.set("temperature", value);
+                  updateElementAttributes(cellId, { temperature: value });
+                }
+              } else if (cell.get("type") === "PlantChiller") {
+                cell.setSelectedValue(selectedValue);
+                cell.updateDeviceData({ [selectedValue]: value });
+                if (selectedValue === "temperature") {
+                  cell.set("temperature", value);
+                  updateElementAttributes(cellId, { temperature: value });
+                }
+              } else if (cell.get("type") === "HeatPump") {
+                cell.setSelectedValue(selectedValue);
+                cell.updateDeviceData({ [selectedValue]: value });
+                if (selectedValue === "temperature") {
+                  cell.set("temperature", value);
+                  updateElementAttributes(cellId, { temperature: value });
+                }
+              } else if (cell.get("type") === "VatWithAgitator") {
+                cell.setSelectedValue(selectedValue);
+                cell.updateDeviceData({ [selectedValue]: value });
+                if (selectedValue === "temperature") {
+                  cell.set("temperature", value);
+                  updateElementAttributes(cellId, { temperature: value });
+                }
+              } else {
+                // For other cell types, use the label
+                cell.attr("label/text", displayText);
+              }
               cell.attr("label/text", displayText);
             } catch (labelError) {
               console.error("Error formatting label:", labelError);
               // cell.attr("label/text", "Error: Invalid Value");
             }
 
+            if (cell.get("type") === "CoolingPlate") {
+              // Also update temperature property if selectedValue is temperature
+              if (
+                typeof value === "number" &&
+                selectedValue === "temperature"
+              ) {
+                cell.set("temperature", value);
+                // updateElementAttributes(selectedElement, {
+                //   ...elementData,
+                //   temperature: value,
+                // });
+              }
+            }
+
+            if (cell.get("type") === "PlantChiller") {
+              // Also update temperature property if selectedValue is temperature
+              if (
+                typeof value === "number" &&
+                selectedValue === "temperature"
+              ) {
+                cell.set("temperature", value);
+                // updateElementAttributes(selectedElement, {
+                //   ...elementData,
+                //   temperature: value,
+                // });
+              }
+            }
+            if (cell.get("type") === "HeatPump") {
+              // Also update temperature property if selectedValue is temperature
+              if (
+                typeof value === "number" &&
+                selectedValue === "temperature"
+              ) {
+                cell.set("temperature", value);
+                // updateElementAttributes(selectedElement, {
+                //   ...elementData,
+                //   temperature: value,
+                // });
+              }
+            }
+            if (cell.get("type") === "VatWithAgitator") {
+              // Also update temperature property if selectedValue is temperature
+              if (
+                typeof value === "number" &&
+                selectedValue === "temperature"
+              ) {
+                cell.set("temperature", value);
+                // updateElementAttributes(selectedElement, {
+                //   ...elementData,
+                //   temperature: value,
+                // });
+              }
+            }
             if (typeof value === "number" && selectedValue == "level") {
               // Scale the tank height based on the value
               const tankPercentage = (value / 100) * 100; // Assuming value is 0-100
@@ -1123,7 +1317,17 @@ const DashboardEditor = () => {
           }
         } catch (error) {
           console.error("Error updating cell display:", error);
-          cell.attr("label/text", "Error: Update Failed");
+          if (cell.get("type") === "CoolingPlate") {
+            cell.updateDeviceData({ [selectedValue]: "Error" });
+          } else if (cell.get("type") === "PlantChiller") {
+            cell.updateDeviceData({ [selectedValue]: "Error" });
+          } else if (cell.get("type") === "HeatPump") {
+            cell.updateDeviceData({ [selectedValue]: "Error" });
+          } else if (cell.get("type") === "VatWithAgitator") {
+            cell.updateDeviceData({ [selectedValue]: "Error" });
+          } else {
+            cell.attr("label/text", "Error: Update Failed");
+          }
         }
       }
     );
@@ -1168,6 +1372,56 @@ const DashboardEditor = () => {
                 deviceId,
                 sensorDataToUse,
                 (value) => {
+                  const modelName = sensorDataToUse || "Device";
+
+                  if (cell.get("type") === "CoolingPlate") {
+                    cell.setSelectedValue(sensorDataToUse);
+                    cell.updateDeviceData({ [sensorDataToUse]: value });
+
+                    if (sensorDataToUse === "temperature") {
+                      cell.set("temperature", value);
+                      updateElementAttributes(cellId, { temperature: value });
+                    }
+                  } else {
+                    // Handle other cell types
+                    cell.attr("label/text", `${modelName}: ${value}`);
+                  }
+                  if (cell.get("type") === "PlantChiller") {
+                    // Handle PlantChiller updates
+                    cell.setSelectedValue(sensorDataToUse);
+                    cell.updateDeviceData({ [sensorDataToUse]: value });
+
+                    if (sensorDataToUse === "temperature") {
+                      cell.set("temperature", value);
+                      updateElementAttributes(cellId, { temperature: value });
+                    }
+
+                    if (cell.get("type") === "HeatPump") {
+                      // Handle PlantChiller updates
+                      cell.setSelectedValue(sensorDataToUse);
+                      cell.updateDeviceData({ [sensorDataToUse]: value });
+
+                      if (sensorDataToUse === "temperature") {
+                        cell.set("temperature", value);
+                        updateElementAttributes(cellId, { temperature: value });
+                      }
+                    }
+                  } else {
+                    // Handle other cell types
+                    cell.attr("label/text", `${modelName}: ${value}`);
+                  }
+                  if (cell.get("type") === "VatWithAgitator") {
+                    cell.setSelectedValue(sensorDataToUse);
+                    cell.updateDeviceData({ [sensorDataToUse]: value });
+
+                    if (sensorDataToUse === "temperature") {
+                      cell.set("temperature", value);
+                      updateElementAttributes(cellId, { temperature: value });
+                    }
+                  } else {
+                    // Handle other cell types
+                    cell.attr("label/text", `${modelName}: ${value}`);
+                  }
                   if (typeof value !== "undefined") {
                     const modelName = sensorDataToUse || "Device";
                     cell.attr("label/text", `${modelName}: ${value}`);
@@ -1664,9 +1918,9 @@ const DashboardEditor = () => {
       );
     });
 
-    paper.on("element:pointerclick", (elementView) => {
-      elementView.removeTools();
-    });
+    // paper.on("element:pointerclick", (elementView) => {
+    //   elementView.removeTools();
+    // });
 
     let currentLinkToolsView;
 
@@ -1802,33 +2056,33 @@ const DashboardEditor = () => {
     });
 
     const stencilElements = [
-      {
-        type: "custom.TemplateImage",
-        svg: MotorPumpSVG,
-        size: { width: 80, height: 60 },
-        cloneSize: { width: 200, height: 200 },
-        attrs: {
-          image: {
-            "data-animated": false,
-            class: "",
-          },
-        },
-        contextMenu: [
-          {
-            content: "Pulse Animation",
-            action: (cellView) => cellView.model.pulse(),
-          },
-          {
-            content: "Rotate Animation",
-            action: (cellView) => cellView.model.rotate(),
-          },
-          "-",
-          {
-            content: "Stop Animation",
-            action: (cellView) => cellView.model.stopAnimation(),
-          },
-        ],
-      },
+      // {
+      //   type: "custom.TemplateImage",
+      //   svg: MotorPumpSVG,
+      //   size: { width: 80, height: 60 },
+      //   cloneSize: { width: 200, height: 200 },
+      //   attrs: {
+      //     image: {
+      //       "data-animated": false,
+      //       class: "",
+      //     },
+      //   },
+      //   contextMenu: [
+      //     {
+      //       content: "Pulse Animation",
+      //       action: (cellView) => cellView.model.pulse(),
+      //     },
+      //     {
+      //       content: "Rotate Animation",
+      //       action: (cellView) => cellView.model.rotate(),
+      //     },
+      //     "-",
+      //     {
+      //       content: "Stop Animation",
+      //       action: (cellView) => cellView.model.stopAnimation(),
+      //     },
+      //   ],
+      // },
       {
         type: "standard.Rectangle",
         size: { width: 100, height: 60 },
@@ -1865,7 +2119,6 @@ const DashboardEditor = () => {
       new CoolingPlate({
         position: { x: 10, y: 10 },
         size: { width: 80, height: 112 },
-
         cloneSize: { width: 321, height: 512 },
         ports: {
           items: [
@@ -1923,7 +2176,7 @@ const DashboardEditor = () => {
       new IceBank({
         position: { x: 10, y: 10 },
         size: { width: 100, height: 80 },
-        cloneSize: { width: 270, height: 200 },
+        cloneSize: { width: 390, height: 280 },
         ports: {
           items: [
             { id: "in1", group: "in" },
@@ -1976,13 +2229,6 @@ const DashboardEditor = () => {
         cloneSize: { width: 200, height: 200 },
         attrs: {},
       },
-      // {
-      //   type: "custom.TemplateImage",
-      //   svg: CoolingPlate,
-      //   size: { width: 80, height: 60 },
-      //   cloneSize: { width: 200, height: 250 },
-      //   attrs: {},
-      // },
       {
         type: "custom.TemplateImage",
         svg: VatAgitator,
@@ -2753,21 +2999,21 @@ const DashboardEditor = () => {
       },
     });
 
-    const heatPump = new HeatPump({
-      position: { x: 320, y: 250 },
-      power: 0,
-    });
-    // heatpumpRef.current = heatPump;
-    graph.addCell(heatPump);
+    // const heatPump = new HeatPump({
+    //   position: { x: 320, y: 250 },
+    //   power: 0,
+    // });
+    // // heatpumpRef.current = heatPump;
+    // graph.addCell(heatPump);
 
-    const vat = new VatWithAgitator({
-      position: { x: 320, y: 250 },
-      size: { width: 300, height: 368 },
-      waterLevel: 0.5,
-      agitatorSpeed: 0.5,
-    });
-    // vatRef.current = vat;
-    graph.addCell(vat);
+    // const vat = new VatWithAgitator({
+    //   position: { x: 320, y: 250 },
+    //   size: { width: 300, height: 368 },
+    //   waterLevel: 0,
+    //   agitatorSpeed: 0,
+    // });
+    // // vatRef.current = vat;
+    // graph.addCell(vat);
 
     const svgMarkup = {
       tagName: "svg",
@@ -3168,6 +3414,7 @@ const DashboardEditor = () => {
   };
 
   const handleValueChange = (event) => {
+    const newValue = event.target.value;
     setSelectedValue(event.target.value);
     if (selectedCell) {
       console.log(
@@ -3176,8 +3423,23 @@ const DashboardEditor = () => {
       );
       const cellId = getCellId(selectedCell);
       const data = cellDeviceData.current.get(cellId);
+      // if (selectedCell && selectedCell.get("type") === ) {
+      //   // Set the selected value type
+      //   selectedCell.setSelectedValue(newValue);
+
+      //   // Update the device data if payload exists
+      //   if (payload && Object.keys(payload).length > 0) {
+      //     selectedCell.updateDeviceData(payload);
+      //   }
+
+      //   // If the selected value is 'temperature' and exists in payload,
+      //   // also update the temperature property directly
+      //   if (newValue === "temperature" && payload[newValue] !== undefined) {
+      //     selectedCell.set("temperature", payload[newValue]);
+      //   }
+      // }
       if (data) {
-        //  updateCellDisplay(selectedCell, data);
+        //updateCellDisplay(selectedCell, data);
       }
     }
   };
@@ -3186,21 +3448,31 @@ const DashboardEditor = () => {
     if (elements[element.id]) {
       return;
     }
+
+    const currentTemperature = element.get("temperature") || 0;
     const defaultAttributes = {
       isRunning: false,
-      power: 1,
-      waterLevel: 0.5,
-      agitatorSpeed: 0.2,
+      power: 0,
+      waterLevel: 0.0,
+      agitatorSpeed: 0.0,
       magnet_status: "close",
+      temperature: currentTemperature,
     };
 
     if (element instanceof HeatPump) {
-      defaultAttributes.power = 1;
+      defaultAttributes.power = 0;
     } else if (element instanceof VatWithAgitator) {
-      defaultAttributes.waterLevel = 0.5;
-      defaultAttributes.agitatorSpeed = 0.2;
+      defaultAttributes.temperature = 0.0;
+      defaultAttributes.waterLevel = 0.0;
+      defaultAttributes.agitatorSpeed = 0.0;
     } else if (element instanceof MotorPump) {
       defaultAttributes.magnet_status = "close";
+    } else if (element instanceof CoolingPlate) {
+      defaultAttributes.temperature = 0.0;
+    } else if (element instanceof PlantChiller) {
+      defaultAttributes.temperature = 0.0;
+    } else if (element instanceof HeatPump) {
+      defaultAttributes.temperature = 0.0;
     }
 
     setElements((prev) => ({
@@ -3234,6 +3506,7 @@ const DashboardEditor = () => {
         console.log("[React] Updated element:", updated[id]);
 
         const element = updated[id].element;
+        const elementType = updated[id].type;
         console.log("[React] JointJS element:", element);
 
         if (attributes.power !== undefined) {
@@ -3252,6 +3525,54 @@ const DashboardEditor = () => {
             "rotator/fill",
             attributes.isRunning ? "#52C54C" : "#C9C9C9"
           );
+        }
+
+        if (
+          elementType === "CoolingPlate" &&
+          attributes.temperature !== undefined &&
+          element
+        ) {
+          console.log(
+            "Setting temperature on CoolingPlate:",
+            attributes.temperature
+          );
+          element.set("temperature", attributes.temperature);
+        }
+
+        if (
+          elementType === "PlantChiller" &&
+          attributes.temperature !== undefined &&
+          element
+        ) {
+          console.log(
+            "Setting temperature on PlantChiller:",
+            attributes.temperature
+          );
+          element.set("temperature", attributes.temperature);
+        }
+
+        if (
+          elementType === "HeatPump" &&
+          attributes.temperature !== undefined &&
+          element
+        ) {
+          console.log(
+            "Setting temperature on HeatPump:",
+            attributes.temperature
+          );
+          element.set("temperature", attributes.temperature);
+        }
+
+        if (
+          elementType === "VatWithAgitator" &&
+          attributes.temperature !== undefined &&
+          element
+        ) {
+          console.log(
+            "Setting temperature on VatWithAgitator:",
+            attributes.temperature
+          );
+          element.set("temperature", attributes.temperature);
         }
 
         if (attributes.waterLevel !== undefined) {
@@ -3368,6 +3689,8 @@ const DashboardEditor = () => {
   };
 
   const toggleRunning = (id) => {
+    const defaults = {};
+    const type = elements[id].type;
     console.log("[React] toggleRunning called for id:", id);
     const current = elements[id]?.isRunning || false;
     const newPower = current ? 0 : 1;
@@ -3377,6 +3700,36 @@ const DashboardEditor = () => {
       isRunning: !current,
       power: newPower,
     });
+
+    if (type === "VatWithAgitator") {
+      updateElementAttributes(id, {
+        power: newPower,
+        temperature: 0,
+      });
+    }
+    if (type === "CoolingPlate") {
+      updateElementAttributes(id, {
+        power: newPower,
+        temperature: 0,
+      });
+    }
+    if (type === "PlantChiller") {
+      updateElementAttributes(id, {
+        power: newPower,
+        temperature: 0,
+      });
+    }
+    if (type === "HeatPump") {
+      updateElementAttributes(id, {
+        power: newPower,
+        temperature: 0,
+      });
+    }
+    if (type === "IceBank") {
+      updateElementAttributes(id, {
+        power: newPower,
+      });
+    }
   };
 
   const turnOn = (id) => {
@@ -3827,7 +4180,7 @@ const DashboardEditor = () => {
                   </FormControl>
                 )}
 
-                <FormControl fullWidth sx={{ mb: 2, mt: 1 }}>
+                {/* <FormControl fullWidth sx={{ mb: 2, mt: 1 }}>
                   <InputLabel>Animation Type</InputLabel>
                   <Select
                     value={animationType}
@@ -3857,7 +4210,7 @@ const DashboardEditor = () => {
                       sx={{ mt: 1 }}
                     />
                   </Box>
-                )}
+                )} */}
 
                 {/* {selectedDevice && Object.keys(payload).length > 0 && (
                   <FormControl component="fieldset">
@@ -3952,6 +4305,138 @@ const DashboardEditor = () => {
                             Reset
                           </Button>
                         </Stack>
+                      </Stack>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {elementData.type === "CoolingPlate" && (
+                  <Card elevation={3}>
+                    <CardContent>
+                      <Stack
+                        direction="row"
+                        alignItems="center"
+                        spacing={1}
+                        mb={2}
+                      >
+                        <Settings color="primary" />
+                        <Typography variant="h6">
+                          Cooling Plate Controls
+                        </Typography>
+                      </Stack>
+                      <div className="text-xs mt-2">
+                        Status: {elementData.power ? "ON" : "OFF"}
+                      </div>
+
+                      <Stack spacing={3}>
+                        {/* Status */}
+                        <Box>
+                          <FormControlLabel
+                            control={
+                              <Switch
+                                checked={elementData.power}
+                                onChange={() => {
+                                  // Toggle between on/off states
+                                  if (elementData.power) {
+                                    toggleRunning(selectedElement);
+                                  } else {
+                                    toggleRunning(selectedElement);
+                                  }
+                                }}
+                                color="primary"
+                              />
+                            }
+                            label={elementData.power ? "Power ON" : "Power OFF"}
+                          />
+                        </Box>
+                      </Stack>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {elementData.type === "PlantChiller" && (
+                  <Card elevation={3}>
+                    <CardContent>
+                      <Stack
+                        direction="row"
+                        alignItems="center"
+                        spacing={1}
+                        mb={2}
+                      >
+                        <Settings color="primary" />
+                        <Typography variant="h6">
+                          Plant Chiller Controls
+                        </Typography>
+                      </Stack>
+                      <div className="text-xs mt-2">
+                        Status: {elementData.power ? "ON" : "OFF"}
+                      </div>
+
+                      <Stack spacing={3}>
+                        {/* Status */}
+                        <Box>
+                          <FormControlLabel
+                            control={
+                              <Switch
+                                checked={elementData.power}
+                                onChange={() => {
+                                  // Toggle between on/off states
+                                  if (elementData.power) {
+                                    toggleRunning(selectedElement);
+                                  } else {
+                                    toggleRunning(selectedElement);
+                                  }
+                                }}
+                                color="primary"
+                              />
+                            }
+                            label={elementData.power ? "Power ON" : "Power OFF"}
+                          />
+                        </Box>
+                      </Stack>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {elementData.type === "IceBank" && (
+                  <Card elevation={3}>
+                    <CardContent>
+                      <Stack
+                        direction="row"
+                        alignItems="center"
+                        spacing={1}
+                        mb={2}
+                      >
+                        <Settings color="primary" />
+                        <Typography variant="h6">
+                          Plant Chiller Controls
+                        </Typography>
+                      </Stack>
+                      <div className="text-xs mt-2">
+                        Status: {elementData.power ? "ON" : "OFF"}
+                      </div>
+
+                      <Stack spacing={3}>
+                        {/* Status */}
+                        <Box>
+                          <FormControlLabel
+                            control={
+                              <Switch
+                                checked={elementData.power}
+                                onChange={() => {
+                                  // Toggle between on/off states
+                                  if (elementData.power) {
+                                    toggleRunning(selectedElement);
+                                  } else {
+                                    toggleRunning(selectedElement);
+                                  }
+                                }}
+                                color="primary"
+                              />
+                            }
+                            label={elementData.power ? "Power ON" : "Power OFF"}
+                          />
+                        </Box>
                       </Stack>
                     </CardContent>
                   </Card>
@@ -4066,7 +4551,7 @@ const DashboardEditor = () => {
                   </Card>
                 )}
 
-                <Box className="animation-controls">
+                {/* <Box className="animation-controls">
                   <Typography variant="subtitle2">
                     Animation Controls
                   </Typography>
@@ -4124,7 +4609,7 @@ const DashboardEditor = () => {
                       Stop
                     </Button>
                   </Box>
-                </Box>
+                </Box> */}
 
                 <Box
                   ref={inspectorContainerRef}

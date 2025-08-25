@@ -6,6 +6,7 @@ class IceBank extends joint.dia.Element {
       ...super.defaults,
       type: "IceBank",
       size: { width: 856, height: 742 },
+      power: 0, // Add power property
       attrs: {
         root: {
           magnetSelector: "body",
@@ -35,6 +36,7 @@ class IceBank extends joint.dia.Element {
                 <rect @selector="pipeEndStroke" />
               </g>
             `,
+
             size: { width: 37.7213, height: 61.982 },
             z: 10,
             attrs: {
@@ -158,6 +160,7 @@ class IceBank extends joint.dia.Element {
     joint.dia.Element.prototype.initialize.apply(this, arguments);
     this.updateAttrs();
     this.on("change:size", this.updateAttrs, this);
+    this.on("change:power", this.updatePowerState, this); // Add power state listener
   }
 
   updateAttrs() {
@@ -254,7 +257,7 @@ class IceBank extends joint.dia.Element {
         y1: 238.586 * scaleY,
         x2: 288.414 * scaleX,
         y2: 255.586 * scaleY,
-        stroke: "#737373",
+        stroke: "##737373",
         strokeWidth: 4 * minScale,
       },
       valve3Circle: {
@@ -329,22 +332,6 @@ class IceBank extends joint.dia.Element {
           attrs: { x1: "0%", y1: "50%", x2: "100%", y2: "50%" },
         },
       },
-      //   pipe1: {
-      //     x: 659 * scaleX,
-      //     y: 552.728 * scaleY,
-      //     width: 18 * scaleX,
-      //     height: 259.679 * scaleY,
-      //     transform: "rotate(-45)",
-      //     fill: "#808080",
-      //   },
-      //   pipe2: {
-      //     x: 659 * scaleX,
-      //     y: 742 * scaleY,
-      //     width: 18 * scaleX,
-      //     height: 196 * scaleY,
-      //     transform: "rotate(-90)",
-      //     fill: "#808080",
-      //   },
     });
 
     // Update port positions
@@ -402,6 +389,54 @@ class IceBank extends joint.dia.Element {
         strokeWidth: 4 * portScale,
       });
     });
+
+    // Update power state after scaling
+    this.updatePowerState();
+  }
+
+  // NEW METHOD: Update power state colors
+  updatePowerState() {
+    const power = this.get("power") || 0;
+    const color = power ? "#313BFF" : "#737373"; // Blue when on, gray when off
+
+    // Update main body colors based on power state
+    this.attr({
+      mainBody: {
+        fill: {
+          type: "linearGradient",
+          stops: [
+            { offset: "0%", color: power ? "#313BFF" : "#808080" },
+            { offset: "28.8462%", color: power ? "#6A71FF" : "#E2E2E2" },
+            { offset: "51.9231%", color: power ? "#A3A7FF" : "white" },
+            { offset: "72.5962%", color: power ? "#6A71FF" : "#E2E2E2" },
+            { offset: "100%", color: power ? "#313BFF" : "#808080" },
+          ],
+          attrs: { x1: "100%", y1: "50%", x2: "0%", y2: "50%" },
+        },
+      },
+      topVertical: {
+        fill: {
+          type: "linearGradient",
+          stops: [
+            { offset: "0%", color: power ? "#313BFF" : "#737373" },
+            { offset: "51.4423%", color: power ? "#6A71FF" : "#D9D9D9" },
+            { offset: "100%", color: power ? "#313BFF" : "#737373" },
+          ],
+          attrs: { x1: "0%", y1: "50%", x2: "100%", y2: "50%" },
+        },
+      },
+      topHorizontal: {
+        fill: {
+          type: "linearGradient",
+          stops: [
+            { offset: "0%", color: power ? "#313BFF" : "#737373" },
+            { offset: "51.4423%", color: power ? "#6A71FF" : "#D9D9D9" },
+            { offset: "100%", color: power ? "#313BFF" : "#737373" },
+          ],
+          attrs: { x1: "0%", y1: "50%", x2: "100%", y2: "50%" },
+        },
+      },
+    });
   }
 
   scalePath(pathData, scaleX, scaleY) {
@@ -422,6 +457,34 @@ class IceBank extends joint.dia.Element {
         );
       }
     );
+  }
+
+  get power() {
+    return this.get("power") || 0;
+  }
+
+  set power(value) {
+    this.set("power", value);
+  }
+
+  set(key, value, options) {
+    const result = super.set(key, value, options);
+
+    if (typeof key === "object") {
+      if (key.power !== undefined) {
+        this.updatePowerState();
+      }
+    } else if (key === "power") {
+      this.updatePowerState();
+    }
+
+    return result;
+  }
+
+  togglePower() {
+    const currentPower = this.get("power") || 0;
+    this.set("power", currentPower ? 0 : 1);
+    return this.get("power");
   }
 }
 

@@ -6,14 +6,18 @@ class PlantChiller extends joint.dia.Element {
       ...super.defaults,
       type: "PlantChiller",
       size: { width: 771, height: 646 },
+      power: 0, // Add power property
+      temperature: 0, // Add temperature property
+      selectedValue: "", // Add this to store the selected value type
+      deviceData: {}, // Add this to store the actual device data
       attrs: {
         root: {
           magnetSelector: "body",
         },
         body: {
-          refWidth: "100%",
-          refHeight: "100%",
-          fill: "none",
+          // refWidth: "100%",
+          // refHeight: "100%",
+          // fill: "none",
         },
       },
       ports: {
@@ -137,14 +141,24 @@ class PlantChiller extends joint.dia.Element {
       <rect @selector="leftBar"/>
       <rect @selector="rightBar"/>
       <rect @selector="base"/>
-      <rect @selector="controlPanel"/>
+      <g @selector="TempTextDisplayGroup">
+        <rect @selector="controlPanel"/>
+        <text @selector="controlPanelTempText"/>
+      </g>
     `;
   }
 
   initialize() {
     joint.dia.Element.prototype.initialize.apply(this, arguments);
     this.updateAttrs();
+    this.updateTemperatureDisplay(); // Add this line
     this.on("change:size", this.updateAttrs, this);
+    this.on("change:power", this.updatePowerState, this); // Add power state listener
+    this.on(
+      "change:selectedValue change:deviceData change:temperature",
+      this.updateTemperatureDisplay,
+      this
+    ); // Add temperature listener
   }
 
   updateAttrs() {
@@ -406,6 +420,185 @@ class PlantChiller extends joint.dia.Element {
         strokeWidth: 4 * portScale,
       });
     });
+
+    // Update power state after scaling
+    this.updatePowerState();
+
+    // Update temperature display after scaling
+    this.updateTemperatureDisplay();
+  }
+
+  // NEW METHOD: Update temperature display
+  updateTemperatureDisplay() {
+    const size = this.get("size");
+    const scaleX = size.width / 771;
+    const scaleY = size.height / 646;
+    const minScale = Math.min(scaleX, scaleY);
+
+    const selectedValue = this.get("selectedValue");
+    const deviceData = this.get("deviceData") || {};
+    const temperature = this.get("temperature") || 0;
+
+    let displayValue;
+    let displayText;
+
+    if (selectedValue && deviceData[selectedValue] !== undefined) {
+      // If a specific value is selected and exists in device data, use it
+      displayValue = deviceData[selectedValue];
+      displayText = `${displayValue}`;
+    } else if (selectedValue === "temperature" && temperature !== undefined) {
+      // If temperature is specifically selected, use the temperature property
+      displayValue = temperature;
+      displayText = `${displayValue}`;
+    } else {
+      // Default fallback
+      displayValue = temperature;
+      displayText = `${displayValue}`;
+    }
+
+    // Format the display value (you can customize this formatting)
+    if (typeof displayValue === "number") {
+      const formattedValue = displayValue.toFixed(1);
+      if (selectedValue === "temperature") {
+        displayText = displayText.replace(
+          displayValue.toString(),
+          formattedValue + "°C"
+        );
+      } else {
+        displayText = displayText.replace(
+          displayValue.toString(),
+          formattedValue
+        );
+      }
+    } else if (selectedValue === "temperature") {
+      displayText = displayText + "°C";
+    }
+
+    this.attr("controlPanelTempText", {
+      x: 90 * scaleX + (323 * scaleX) / 2,
+      y: 21 * scaleY + (179 * scaleY) / 2,
+      text: displayText,
+      fontSize: 70 * minScale,
+      fontFamily: "Arial",
+      fill: "#333",
+      fontWeight: "bold",
+      originX: "center",
+      originY: "center",
+    });
+  }
+
+  // NEW METHOD: Update power state colors
+  updatePowerState() {
+    const power = this.get("power") || 0;
+    const color = power ? "#313BFF" : "#737373"; // Blue when on, gray when off
+
+    // Update main body colors based on power state
+    this.attr({
+      upperBody: {
+        fill: {
+          type: "linearGradient",
+          stops: [
+            { offset: "0%", color: power ? "#313BFF" : "#808080" },
+            { offset: "28.8462%", color: power ? "#6A71FF" : "#E2E2E2" },
+            { offset: "51.9231%", color: power ? "#A3A7FF" : "white" },
+            { offset: "72.5962%", color: power ? "#6A71FF" : "#E2E2E2" },
+            { offset: "100%", color: power ? "#313BFF" : "#808080" },
+          ],
+          attrs: { x1: "100%", y1: "50%", x2: "0%", y2: "50%" },
+        },
+      },
+      lowerBody: {
+        fill: {
+          type: "linearGradient",
+          stops: [
+            { offset: "0%", color: power ? "#313BFF" : "#808080" },
+            { offset: "28.8462%", color: power ? "#6A71FF" : "#E2E2E2" },
+            { offset: "51.9231%", color: power ? "#A3A7FF" : "white" },
+            { offset: "72.5962%", color: power ? "#6A71FF" : "#E2E2E2" },
+            { offset: "100%", color: power ? "#313BFF" : "#808080" },
+          ],
+          attrs: { x1: "100%", y1: "50%", x2: "0%", y2: "50%" },
+        },
+      },
+      rightUpperSide: {
+        fill: {
+          type: "linearGradient",
+          stops: [
+            { offset: "0%", color: power ? "#313BFF" : "#737373" },
+            { offset: "25.9615%", color: power ? "#6A71FF" : "#D9D9D9" },
+            { offset: "50.9615%", color: power ? "#A3A7FF" : "white" },
+            { offset: "74.0385%", color: power ? "#6A71FF" : "#D9D9D9" },
+            { offset: "100%", color: power ? "#313BFF" : "#737373" },
+          ],
+          attrs: { x1: "50%", y1: "0%", x2: "50%", y2: "100%" },
+        },
+      },
+      rightLowerSide: {
+        fill: {
+          type: "linearGradient",
+          stops: [
+            { offset: "0%", color: power ? "#313BFF" : "#737373" },
+            { offset: "25.9615%", color: power ? "#6A71FF" : "#D9D9D9" },
+            { offset: "50.9615%", color: power ? "#A3A7FF" : "white" },
+            { offset: "74.0385%", color: power ? "#6A71FF" : "#D9D9D9" },
+            { offset: "100%", color: power ? "#313BFF" : "#737373" },
+          ],
+          attrs: { x1: "50%", y1: "0%", x2: "50%", y2: "100%" },
+        },
+      },
+      leftUpperSide: {
+        fill: {
+          type: "linearGradient",
+          stops: [
+            { offset: "0%", color: power ? "#313BFF" : "#737373" },
+            { offset: "25.9615%", color: power ? "#6A71FF" : "#D9D9D9" },
+            { offset: "50.9615%", color: power ? "#A3A7FF" : "white" },
+            { offset: "74.0385%", color: power ? "#6A71FF" : "#D9D9D9" },
+            { offset: "100%", color: power ? "#313BFF" : "#737373" },
+          ],
+          attrs: { x1: "50%", y1: "0%", x2: "50%", y2: "100%" },
+        },
+      },
+      leftLowerSide: {
+        fill: {
+          type: "linearGradient",
+          stops: [
+            { offset: "0%", color: power ? "#313BFF" : "#737373" },
+            { offset: "25.9615%", color: power ? "#6A71FF" : "#D9D9D9" },
+            { offset: "50.9615%", color: power ? "#A3A7FF" : "white" },
+            { offset: "74.0385%", color: power ? "#6A71FF" : "#D9D9D9" },
+            { offset: "100%", color: power ? "#313BFF" : "#737373" },
+          ],
+          attrs: { x1: "50%", y1: "0%", x2: "50%", y2: "100%" },
+        },
+      },
+      leftBar: {
+        fill: {
+          type: "linearGradient",
+          stops: [
+            { offset: "0%", color: power ? "#313BFF" : "#808080" },
+            { offset: "28.8462%", color: power ? "#6A71FF" : "#E2E2E2" },
+            { offset: "51.9231%", color: power ? "#A3A7FF" : "white" },
+            { offset: "72.5962%", color: power ? "#6A71FF" : "#E2E2E2" },
+            { offset: "100%", color: power ? "#313BFF" : "#808080" },
+          ],
+          attrs: { x1: "100%", y1: "50%", x2: "0%", y2: "50%" },
+        },
+      },
+      rightBar: {
+        fill: {
+          type: "linearGradient",
+          stops: [
+            { offset: "0%", color: power ? "#313BFF" : "#808080" },
+            { offset: "28.8462%", color: power ? "#6A71FF" : "#E2E2E2" },
+            { offset: "51.9231%", color: power ? "#A3A7FF" : "white" },
+            { offset: "72.5962%", color: power ? "#6A71FF" : "#E2E2E2" },
+            { offset: "100%", color: power ? "#313BFF" : "#808080" },
+          ],
+          attrs: { x1: "100%", y1: "50%", x2: "0%", y2: "50%" },
+        },
+      },
+    });
   }
 
   scalePath(pathData, scaleX, scaleY) {
@@ -426,6 +619,63 @@ class PlantChiller extends joint.dia.Element {
         );
       }
     );
+  }
+
+  setSelectedValue(value) {
+    this.set("selectedValue", value);
+  }
+
+  // NEW METHOD: Update device data and refresh display
+  updateDeviceData(data) {
+    this.set("deviceData", data);
+  }
+
+  get power() {
+    return this.get("power") || 0;
+  }
+
+  set power(value) {
+    this.set("power", value);
+  }
+
+  get temperature() {
+    return this.get("temperature") || 0;
+  }
+
+  set temperature(value) {
+    this.set("temperature", value);
+  }
+
+  set(key, value, options) {
+    const result = super.set(key, value, options);
+
+    if (typeof key === "object") {
+      if (key.power !== undefined) {
+        this.updatePowerState();
+      }
+      if (
+        key.selectedValue !== undefined ||
+        key.deviceData !== undefined ||
+        key.temperature !== undefined
+      ) {
+        this.updateTemperatureDisplay();
+      }
+    } else if (key === "power") {
+      this.updatePowerState();
+    } else if (
+      key === "selectedValue" ||
+      key === "deviceData" ||
+      key === "temperature"
+    ) {
+      this.updateTemperatureDisplay();
+    }
+
+    return result;
+  }
+  togglePower() {
+    const currentPower = this.get("power") || 0;
+    this.set("power", currentPower ? 0 : 1);
+    return this.get("power");
   }
 }
 
