@@ -1421,16 +1421,18 @@ const DashboardEditor = () => {
                       cell.set("temperature", value);
                       updateElementAttributes(cellId, { temperature: value });
                     }
+                  } else {
+                    // Handle other cell types
+                    cell.attr("label/text", `${modelName}: ${value}`);
+                  }
 
-                    if (cell.get("type") === "HeatPump") {
-                      // Handle PlantChiller updates
-                      cell.setSelectedValue(sensorDataToUse);
-                      cell.updateDeviceData({ [sensorDataToUse]: value });
+                  if (cell.get("type") === "HeatPump") {
+                    cell.setSelectedValue(sensorDataToUse);
+                    cell.updateDeviceData({ [sensorDataToUse]: value });
 
-                      if (sensorDataToUse === "temperature") {
-                        cell.set("temperature", value);
-                        updateElementAttributes(cellId, { temperature: value });
-                      }
+                    if (sensorDataToUse === "temperature") {
+                      cell.set("temperature", value);
+                      updateElementAttributes(cellId, { temperature: value });
                     }
                   } else {
                     // Handle other cell types
