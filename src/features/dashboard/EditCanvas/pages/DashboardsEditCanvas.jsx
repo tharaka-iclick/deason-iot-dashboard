@@ -13,6 +13,7 @@ import {
   FormControl,
   InputLabel,
   RadioGroup,
+  CircularProgress,
   FormControlLabel,
   Radio,
   Stack,
@@ -32,7 +33,11 @@ import {
   Opacity,
   Speed,
 } from "@mui/icons-material";
-import { ChevronDown, Undo, Redo } from "lucide-react";
+
+import { ChevronDown, Undo, Redo, ArrowLeft, Save } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { SaveDialog } from "../../../../shared/components/ui";
+import { useSelector } from "react-redux";
 import {
   Pipe01,
   // PipeView01,
@@ -65,13 +70,11 @@ import {
   getDevicePayload,
   listenForDevicePayload,
   listenForSensoreData,
+  getDashboardsFromFirestore,
 } from "../../../../../src/services/firebase/dataService";
-import {
-  getStorage,
-  ref,
-  uploadString,
-  getDownloadURL,
-} from "firebase/storage";
+import { ref, uploadString, getDownloadURL, getBytes } from "firebase/storage";
+import { storage } from "../../../../../src/services/firebase/config";
+import { useLocation } from "react-router-dom";
 import { isEqual } from "lodash";
 
 const FLOW_FLAG = "flow";
@@ -971,6 +974,11 @@ class TemplateImage extends joint.dia.Element {
 }
 
 const DashboardEditor = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { user } = useSelector((state) => state.auth);
+
+  // Refs
   const paperContainerRef = useRef(null);
   const stencilContainerRef = useRef(null);
   const paperRef = useRef(null);
@@ -994,7 +1002,7 @@ const DashboardEditor = () => {
   const [selectedCell, setSelectedCell] = useState(null);
   const [deviceModels, setDeviceModels] = useState({});
   const [devices, setDevices] = useState({});
-  const [selectedValue, setSelectedValue] = useState("");
+  const [selectedValue, setSelectedValue] = useState([]);
   const [availableValues, setAvailableValues] = useState([]);
   const [payload, setPayload] = useState({});
   const [animationType, setAnimationType] = useState("pulse");
@@ -1004,7 +1012,11 @@ const DashboardEditor = () => {
   const [elements, setElements] = useState({});
 
   const [heightScale, setHeightScale] = useState(100); // Add this state
-
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [loadingExistingDashboard, setLoadingExistingDashboard] =
+    useState(false);
+  const [existingDashboard, setExistingDashboard] = useState(null);
+  const [loadError, setLoadError] = useState("");
   const setInspectorContainer = (newValue) => {
     inspectorContainerRef.current = newValue;
   };
@@ -1108,13 +1120,15 @@ const DashboardEditor = () => {
     const unsubscribe = listenForSensoreData(
       selectedEUI,
       selectedDevice,
-      selectedValue,
+      selectedValue.length > 0 ? selectedValue[0] : null,
       (value) => {
         try {
           if (typeof value !== "undefined") {
             let displayText;
             try {
-              const modelName = formatKey(selectedValue) || "Device";
+              const modelName =
+                formatKey(selectedValue.length > 0 ? selectedValue[0] : "") ||
+                "Device";
               if (typeof value === "number") {
                 // Format numbers with 2 decimal places
                 displayText = `${modelName}: ${value}`;
@@ -1221,7 +1235,7 @@ const DashboardEditor = () => {
                 // });
               }
             }
-            if (typeof value === "number" && selectedValue == "level") {
+            if (typeof value === "number" && selectedValue.includes("level")) {
               // Scale the tank height based on the value
               const tankPercentage = (value / 100) * 100; // Assuming value is 0-100
               // cell.scaleHeight(tankPercentage);
@@ -1240,7 +1254,10 @@ const DashboardEditor = () => {
               //  const normalizedValue = Math.min(Math.max(value / 100, 0), 1);
               //  const hue = (1 - normalizedValue) * 120;
               //  cell.attr("body/fill", `hsl(${hue}, 100%, 80%)`);
-            } else if (selectedValue == "magnet_status" && value == "open") {
+            } else if (
+              selectedValue.includes("magnet_status") &&
+              value == "open"
+            ) {
               const isOpen = value === "open";
               updateElementAttributes(selectedElement, {
                 magnet_status: "open",
@@ -1254,7 +1271,10 @@ const DashboardEditor = () => {
               //  if (imageEl) {
               //    imageEl.style.animationDuration = `${2 / animationSpeed}s`;
               //  }
-            } else if (selectedValue == "running_status" && value == "on") {
+            } else if (
+              selectedValue.includes("running_status") &&
+              value == "on"
+            ) {
               turnOn(selectedElement);
               selectedCell.tankVolumeUpAnimation();
               const imageEl = document.querySelector(
@@ -1263,7 +1283,7 @@ const DashboardEditor = () => {
               if (imageEl) {
                 imageEl.style.animationDuration = `${2 / animationSpeed}s`;
               }
-            } else if (selectedValue == "agi_mixer" && value == "on") {
+            } else if (selectedValue.includes("agi_mixer") && value == "on") {
               updateElementAttributes(selectedElement, {
                 ...elementData,
                 agitatorSpeed: 100,
@@ -1359,11 +1379,17 @@ const DashboardEditor = () => {
               setAvailableValues(payloadKeys);
               console.log("payloadKeys", payloadKeys);
               console.log("selectedValuew", selectedValue);
-              if (!selectedValue || !payloadKeys.includes(selectedValue)) {
-                setSelectedValue(payloadKeys[0]);
+              if (
+                !selectedValue ||
+                selectedValue.length === 0 ||
+                !selectedValue.some((val) => payloadKeys.includes(val))
+              ) {
+                setSelectedValue([payloadKeys[0]]);
               }
             }
-            const sensorDataToUse = payloadKeys[0] || selectedValue;
+            const sensorDataToUse =
+              payloadKeys[0] ||
+              (selectedValue.length > 0 ? selectedValue[0] : null);
 
             console.log("sensorDataToUse", sensorDataToUse);
             if (sensorDataToUse) {
@@ -1506,6 +1532,72 @@ const DashboardEditor = () => {
 
     fetchDevice();
   }, [selectedEUI]);
+
+  // Load existing dashboard if ID is provided in URL
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const dashboardId = searchParams.get("id");
+
+    if (dashboardId && user?.uid) {
+      loadExistingDashboard(dashboardId);
+    }
+  }, [location.search, user?.uid]);
+
+  const loadExistingDashboard = async (dashboardId) => {
+    try {
+      setLoadingExistingDashboard(true);
+      setLoadError("");
+
+      // Get dashboard metadata from Firestore
+      const dashboards = await getDashboardsFromFirestore(user?.uid);
+      const dashboard = dashboards.find((d) => d.id === dashboardId);
+
+      if (!dashboard) {
+        throw new Error("Dashboard not found");
+      }
+
+      console.log("dashboard", dashboard);
+
+      setExistingDashboard(dashboard);
+
+      // Load the dashboard file from Firebase Storage using the SDK
+      if (dashboard.filepath) {
+        try {
+          // Directly fetch the URL you already have
+          const response = await fetch(dashboard.filepath);
+
+          console.log("dashboardData", response);
+          if (!response.ok) {
+            throw new Error("Failed to load dashboard file from URL");
+          }
+
+          const dashboardData = await response.json();
+
+          console.log("Dashboard data loaded:", dashboardData);
+
+          // Load the graph data into the paper
+          if (paperRef.current && dashboardData) {
+            paperRef.current.model.fromJSON(dashboardData);
+            console.log(
+              "Dashboard loaded successfully via fetch:",
+              dashboardData
+            );
+          }
+
+          // Update current file name
+          setCurrentFileName(dashboard.fileName || "Untitled.joint");
+        } catch (error) {
+          console.error("Failed to load dashboard from URL:", error);
+          throw new Error("Could not load the dashboard file.");
+        }
+      }
+    } catch (error) {
+      console.error("Error loading dashboard:", error);
+      setLoadError(`Failed to load dashboard: ${error.message}`);
+    } finally {
+      setLoadingExistingDashboard(false);
+    }
+  };
 
   const logsContainerRef = useRef(null);
   const lastViewRef = useRef(null);
@@ -3415,7 +3507,11 @@ const DashboardEditor = () => {
 
   const handleValueChange = (event) => {
     const newValue = event.target.value;
-    setSelectedValue(event.target.value);
+    const value =
+      typeof event.target.value === "string"
+        ? event.target.value.split(",")
+        : event.target.value;
+    setSelectedValue(value);
     if (selectedCell) {
       console.log(
         "Stored deviceModelName:",
@@ -3975,9 +4071,46 @@ const DashboardEditor = () => {
           }}
         >
           <Toolbar>
+            <IconButton
+              color="inherit"
+              onClick={() => navigate("/dashboard")}
+              sx={{ mr: 2 }}
+            >
+              <ArrowLeft size={20} />
+            </IconButton>
             <Typography variant="h6" sx={{ flexGrow: 1 }}>
               Dashboard Editor
+              {loadingExistingDashboard && (
+                <Box
+                  component="span"
+                  sx={{
+                    ml: 2,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 1,
+                  }}
+                >
+                  <CircularProgress size={16} />
+                  Loading...
+                </Box>
+              )}
+              {loadError && (
+                <Box
+                  component="span"
+                  sx={{ ml: 2, color: "error.main", fontSize: "0.875rem" }}
+                >
+                  {loadError}
+                </Box>
+              )}
             </Typography>
+
+            <IconButton
+              color="inherit"
+              onClick={() => setSaveDialogOpen(true)}
+              sx={{ mr: 2 }}
+            >
+              <Save size={20} />
+            </IconButton>
 
             <Button
               color="inherit"
@@ -3987,6 +4120,7 @@ const DashboardEditor = () => {
             >
               File
             </Button>
+
             <Menu
               anchorEl={anchorEl}
               open={Boolean(anchorEl)}
@@ -4164,12 +4298,70 @@ const DashboardEditor = () => {
                 </FormControl>
                 {selectedDevice && Object.keys(payload).length > 0 && (
                   <FormControl component="fieldset" fullWidth>
-                    <Typography variant="subtitle2">Display Value:</Typography>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        mb: 1,
+                      }}
+                    >
+                      <Typography variant="subtitle2">
+                        Display Value:
+                      </Typography>
+                      <Box sx={{ display: "flex", gap: 1 }}>
+                        <Button
+                          size="small"
+                          onClick={() => setSelectedValue(availableValues)}
+                          disabled={
+                            selectedValue.length === availableValues.length
+                          }
+                        >
+                          Select All
+                        </Button>
+                        <Button
+                          size="small"
+                          onClick={() => setSelectedValue([])}
+                          disabled={selectedValue.length === 0}
+                        >
+                          Clear
+                        </Button>
+                      </Box>
+                    </Box>
                     <Select
+                      multiple
                       value={selectedValue}
                       onChange={handleValueChange}
                       size="small"
                       displayEmpty
+                      renderValue={(selected) => (
+                        <Box
+                          sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}
+                        >
+                          {selected.length === 0 ? (
+                            <Typography variant="body2" color="text.secondary">
+                              Select values...
+                            </Typography>
+                          ) : (
+                            selected.map((value) => (
+                              <Chip
+                                key={value}
+                                label={value}
+                                size="small"
+                                onDelete={() => {
+                                  const newValue = selectedValue.filter(
+                                    (v) => v !== value
+                                  );
+                                  setSelectedValue(newValue);
+                                }}
+                                onMouseDown={(event) => {
+                                  event.stopPropagation();
+                                }}
+                              />
+                            ))
+                          )}
+                        </Box>
+                      )}
                     >
                       {availableValues.map((value) => (
                         <MenuItem key={value} value={value}>
@@ -4625,6 +4817,58 @@ const DashboardEditor = () => {
           </Box>
         </Box>
       </Box>
+
+      <SaveDialog
+        open={saveDialogOpen}
+        onClose={() => setSaveDialogOpen(false)}
+        existingDashboard={existingDashboard}
+        onSave={(formData) => {
+          setCurrentFileName(formData.fileName);
+
+          // If this is the final save with Firestore ID, navigate back to dashboard
+          if (formData.firestoreId) {
+            console.log("Dashboard saved successfully to Firestore:", formData);
+            // Navigate back to dashboard with success data
+            navigate("/dashboard", {
+              state: {
+                savedDashboard: formData,
+                showSuccess: true,
+                isUpdate: existingDashboard ? true : false,
+              },
+            });
+            return null; // No need to return data for final save
+          }
+
+          // Get the current dashboard data from the paper for initial save
+          if (paperRef.current) {
+            const str = paperRef.current.model.toJSON();
+            const dashboardData = {
+              graph: str,
+              metadata: formData,
+              timestamp: new Date().toISOString(),
+              version: existingDashboard
+                ? (
+                    parseFloat(existingDashboard.version || "1.0") + 0.1
+                  ).toFixed(1)
+                : "1.0",
+              isUpdate: existingDashboard ? true : false,
+              originalId: existingDashboard?.id || null,
+            };
+
+            console.log("Saving dashboard with data:", formData);
+            console.log("Dashboard content:", dashboardData);
+            console.log("Paper model JSON:", str);
+            console.log("Is update:", existingDashboard ? true : false);
+
+            // Return the dashboard data for upload
+            return dashboardData;
+          }
+
+          return null;
+        }}
+        currentFileName={currentFileName}
+        userId={user?.uid || user?.email || ""}
+      />
     </>
   );
 };
