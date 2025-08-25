@@ -6,8 +6,11 @@ class VatWithAgitator extends joint.dia.Element {
       ...super.defaults,
       type: "VatWithAgitator",
       size: { width: 617, height: 761 },
-      waterLevel: 0.2,
+      waterLevel: 0,
       agitatorSpeed: 0,
+      temperature: 0, // Add temperature property
+      selectedValue: "", // Add this to store the selected value type
+      deviceData: {}, // Add this to store the actual device data
       ports: {
         groups: {
           in: {
@@ -414,8 +417,16 @@ class VatWithAgitator extends joint.dia.Element {
           fill: "none",
         },
         tempLevelDisplayText: {
+          x: 360,
+          y: 340,
+          text: "Temp: --°C",
+          fontSize: 16,
+          fontFamily: "Arial",
+          fill: "#333",
+        },
+        tempLevelDisplayLable: {
           x: 290,
-          y: 290,
+          y: 300,
           text: "Temp: --°C",
           fontSize: 16,
           fontFamily: "Arial",
@@ -485,6 +496,7 @@ class VatWithAgitator extends joint.dia.Element {
                         <g @selector="waterLevel_2">
                             <rect @selector="tempLevelRect1"/>
                             <rect @selector="tempLevelRect2"/>
+                            <text @selector="tempLevelDisplayLable"/>
                             <text @selector="tempLevelDisplayText"/>
                         </g>
                     </g>
@@ -504,9 +516,16 @@ class VatWithAgitator extends joint.dia.Element {
 
     this.bubbleAnimations = [];
 
+    this.on(
+      "change:selectedValue change:deviceData change:temperature",
+      this.updateTemperatureDisplay,
+      this
+    ); // Add temperature listener
+
     // Update water level when it changes
     // this.on("change:waterLevel", this.updateWaterLevel);
     // this.on("change:agitatorSpeed", this.updateAgitator);
+    this.on("change:temperature", this.updateTemperatureDisplay, this); // Add temperature listener
   }
 
   updateScale() {
@@ -527,7 +546,78 @@ class VatWithAgitator extends joint.dia.Element {
 
     // Update water level position (needs special handling)
     // this.updateWaterLevel();
+
+    // Update temperature display after scaling
+    this.updateTemperatureDisplay();
   }
+
+  // NEW METHOD: Update temperature display
+  updateTemperatureDisplay() {
+    const size = this.get("size");
+    const scaleX = size.width / 617;
+    const scaleY = size.height / 761;
+    const minScale = Math.min(scaleX, scaleY);
+
+    const selectedValue = this.get("selectedValue");
+    const deviceData = this.get("deviceData") || {};
+    const temperature = this.get("temperature") || 0;
+
+    let displayValue;
+    let displayText;
+    let displayLabel; // New variable for label only
+
+    if (selectedValue && deviceData[selectedValue] !== undefined) {
+      // If a specific value is selected and exists in device data, use it
+      displayValue = deviceData[selectedValue];
+      displayText = `${displayValue}`;
+      displayLabel = `${selectedValue.toUpperCase()}:`; // Extract label only
+    } else if (selectedValue === "temperature" && temperature !== undefined) {
+      // If temperature is specifically selected, use the temperature property
+      displayValue = temperature;
+      displayText = `${displayValue}°C`;
+      displayLabel = "TEMPERATURE:"; // Set label only
+    } else {
+      // Default fallback
+      displayValue = temperature;
+      displayText = `${displayValue}`;
+      displayLabel = "TEMPERATURE:"; // Set label only
+    }
+
+    // Format the display value (you can customize this formatting)
+    if (typeof displayValue === "number") {
+      const formattedValue = displayValue.toFixed(1);
+      if (selectedValue === "temperature") {
+        displayText = displayText.replace(
+          displayValue.toString(),
+          formattedValue + "°C"
+        );
+      } else {
+        displayText = displayText.replace(
+          displayValue.toString(),
+          formattedValue
+        );
+      }
+    } else if (selectedValue === "temperature") {
+      displayText = displayText + "°C";
+    }
+
+    this.attr("tempLevelDisplayLable", {
+      text: displayLabel, // Show only the label (e.g., "TEMPERATURE:")
+      fontSize: 65 * minScale,
+      fontWeight: "bold",
+      fontFamily: "Arial",
+      fill: "#333",
+    });
+
+    this.attr("tempLevelDisplayText", {
+      text: displayText,
+      fontSize: 70 * minScale,
+      fontWeight: "bold",
+      fontFamily: "Arial",
+      fill: "#333",
+    });
+  }
+
   scalePorts(scaleX, scaleY) {
     const portScale = Math.min(scaleX, scaleY);
     this.prop("ports/groups/in/size", {
@@ -586,39 +676,6 @@ class VatWithAgitator extends joint.dia.Element {
       strokeWidth: 4 * portScale,
     });
   }
-  // updateWaterLevel() {
-  //   const size = this.get("size");
-  //   const waterLevel = this.get("waterLevel");
-  //   const originalHeight = 761;
-
-  //   // Calculate water height (509 was original content height, 100 was original water height)
-  //   const waterHeight = 509 * (size.height / originalHeight) * waterLevel;
-
-  //   // Since we're scaling the entire element, we need to counter-scale the water level
-  //   this.attr("waterLevelFill", {
-  //     height: waterHeight,
-  //     y: (216 + (509 - 100)) * (size.height / originalHeight) - waterHeight,
-  //   });
-
-  //   // Update display text
-  //   this.attr("waterLevelDisplayText", {
-  //     text: `Water Level: ${Math.round(waterLevel * 100)}%`,
-  //   });
-  // }
-
-  // updateAgitator() {
-  //   const speed = this.get("agitatorSpeed");
-
-  //   // Update display text
-  //   this.attr("agitatorDisplayText", {
-  //     text: `Agitator: ${Math.round(speed * 100)}%`,
-  //   });
-
-  //   // Animate fan if desired
-  //   this.attr("rudderFan", {
-  //     transform: `rotate(${speed * 360},122,650)`,
-  //   });
-  // }
 
   // Your existing getters/setters
   get waterLevel() {
@@ -636,18 +693,59 @@ class VatWithAgitator extends joint.dia.Element {
   set agitatorSpeed(value) {
     this.set("agitatorSpeed", Math.max(0, Math.min(1, value)));
   }
+
+  get temperature() {
+    return this.get("temperature") || 0;
+  }
+
+  set temperature(value) {
+    this.set("temperature", value);
+  }
+
+  setSelectedValue(value) {
+    this.set("selectedValue", value);
+  }
+
+  // NEW METHOD: Update device data and refresh display
+  updateDeviceData(data) {
+    this.set("deviceData", data);
+  }
+
+  set(key, value, options) {
+    const result = super.set(key, value, options);
+
+    if (typeof key === "object") {
+      if (
+        key.selectedValue !== undefined ||
+        key.deviceData !== undefined ||
+        key.temperature !== undefined
+      ) {
+        this.updateTemperatureDisplay();
+      }
+    } else if (
+      key === "selectedValue" ||
+      key === "deviceData" ||
+      key === "temperature"
+    ) {
+      this.updateTemperatureDisplay();
+    }
+
+    return result;
+  }
 }
 
 const VatWithAgitatorView = joint.dia.ElementView.extend({
   presentationAttributes: joint.dia.ElementView.addPresentationAttributes({
     waterLevel: ["WATER_LEVEL"],
     agitatorSpeed: ["AGITATOR_SPEED"],
+    temperature: ["TEMPERATURE"], // Add temperature presentation attribute
   }),
 
   initFlag: [
     joint.dia.ElementView.Flags.RENDER,
     "WATER_LEVEL",
     "AGITATOR_SPEED",
+    "TEMPERATURE", // Add temperature flag
   ],
 
   confirmUpdate(flag, opt) {
@@ -666,6 +764,11 @@ const VatWithAgitatorView = joint.dia.ElementView.extend({
     if (this.hasFlag(flags, "AGITATOR_SPEED")) {
       this.updateAgitator();
       flags = this.removeFlag(flags, "AGITATOR_SPEED");
+    }
+
+    if (this.hasFlag(flags, "TEMPERATURE")) {
+      // this.updateTemperature();
+      flags = this.removeFlag(flags, "TEMPERATURE");
     }
 
     return flags;
@@ -798,7 +901,7 @@ const VatWithAgitatorView = joint.dia.ElementView.extend({
       )}%</tspan>`;
       waterText.setAttribute(
         "style",
-        "white-space: nowrap; font-size: 45px; font-family: Arial, sans-serif; font-weight: bold;"
+        "white-space: nowrap; font-size: 40px; font-family: Arial, sans-serif; font-weight: bold;"
       );
     }
   },
@@ -813,9 +916,9 @@ const VatWithAgitatorView = joint.dia.ElementView.extend({
 
     if (agitatorText) {
       // agitatorText.textContent = `Agitator 81: ${Math.round(speed * 100)}%`;
-      agitatorText.innerHTML = `<tspan fill="#000000">AGITATOR:</tspan>\n<tspan fill="#078C00">${Math.round(
-        speed * 100
-      )}%</tspan>`;
+      const statusText = speed === 0 ? "OFF" : "ON";
+      const statusColor = speed === 0 ? "#000000" : "#078C00";
+      agitatorText.innerHTML = `<tspan fill="#000000">AGITATOR:</tspan>\n<tspan fill="${statusColor}">${statusText}</tspan>`;
       agitatorText.setAttribute(
         "style",
         "white-space: nowrap; font-size: 35px; font-family: Arial, sans-serif; font-weight: bold;"
@@ -842,6 +945,25 @@ const VatWithAgitatorView = joint.dia.ElementView.extend({
       }
     }
   },
+
+  // NEW METHOD: Update temperature display
+  // updateTemperature() {
+  //   const temperature = this.model.get("temperature") || 0;
+  //   const tempText =
+  //     this.findBySelector("tempLevelDisplayText")[0] ||
+  //     this.el.querySelector('[joint-selector="tempLevelDisplayText"]') ||
+  //     this.el.querySelector('text[selector="tempLevelDisplayText"]');
+
+  //   if (tempText) {
+  //     tempText.innerHTML = `<tspan fill="#000000">TEMP:</tspan>\n<tspan fill="#406AE6">${temperature.toFixed(
+  //       1
+  //     )}°C</tspan>`;
+  //     tempText.setAttribute(
+  //       "style",
+  //       "white-space: nowrap; font-size: 35px; font-family: Arial, sans-serif; font-weight: bold;"
+  //     );
+  //   }
+  // },
 
   onRemove() {
     if (this.fanAnimation) {

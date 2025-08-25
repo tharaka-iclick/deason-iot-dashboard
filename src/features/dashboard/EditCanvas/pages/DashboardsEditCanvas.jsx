@@ -46,7 +46,6 @@ import {
 import * as joint from "@joint/plus";
 import MotorPumpSVG from "../../../WidgetSVG/MotorPumpSVG";
 import HeatPumpSVG from "../../../WidgetSVG/HeatPumpSVG";
-// import CoolingPlate from "../../../WidgetSVG/CoolingPlate";
 import VatAgitator from "../../../WidgetSVG/VatAgitator";
 import Chille from "../../../WidgetSVG/Chiller";
 // import IceBank from "../../../WidgetSVG/IceBank";
@@ -73,12 +72,7 @@ import {
   listenForSensoreData,
   getDashboardsFromFirestore,
 } from "../../../../../src/services/firebase/dataService";
-import {
-  ref,
-  uploadString,
-  getDownloadURL,
-  getBytes,
-} from "firebase/storage";
+import { ref, uploadString, getDownloadURL, getBytes } from "firebase/storage";
 import { storage } from "../../../../../src/services/firebase/config";
 import { useLocation } from "react-router-dom";
 import { isEqual } from "lodash";
@@ -263,6 +257,10 @@ class HeatPump extends joint.dia.Element {
       type: "HeatPump",
       size: { width: 680, height: 396 }, // Default size
       power: 0,
+
+      temperature: 0,
+      selectedValue: "",
+      deviceData: {},
       attrs: {
         root: {
           magnetSelector: "body",
@@ -389,6 +387,7 @@ class HeatPump extends joint.dia.Element {
             <circle @selector="centerCircle"/>
             <path @selector="rotator"/>
             <rect @selector="controlPanel"/>
+            <text @selector="controlPanelTempText"/>
             <rect @selector="controlPanelBorder"/>
             <rect @selector="leftFoot"/>
             <rect @selector="leftFootEnd"/>
@@ -400,7 +399,13 @@ class HeatPump extends joint.dia.Element {
   initialize() {
     joint.dia.Element.prototype.initialize.apply(this, arguments);
     this.updateAttrs();
+    this.updateTemperatureDisplay();
     this.on("change:size", this.updateAttrs, this);
+    this.on(
+      "change:selectedValue change:deviceData change:temperature",
+      this.updateTemperatureDisplay,
+      this
+    );
   }
 
   updateAttrs() {
@@ -618,6 +623,64 @@ class HeatPump extends joint.dia.Element {
     });
   }
 
+  updateTemperatureDisplay() {
+    const size = this.get("size");
+    const scaleX = size.width / 771;
+    const scaleY = size.height / 646;
+    const minScale = Math.min(scaleX, scaleY);
+
+    const selectedValue = this.get("selectedValue");
+    const deviceData = this.get("deviceData") || {};
+    const temperature = this.get("temperature") || 0;
+
+    let displayValue;
+    let displayText;
+
+    if (selectedValue && deviceData[selectedValue] !== undefined) {
+      // If a specific value is selected and exists in device data, use it
+      displayValue = deviceData[selectedValue];
+      displayText = `${displayValue}`;
+    } else if (selectedValue === "temperature" && temperature !== undefined) {
+      // If temperature is specifically selected, use the temperature property
+      displayValue = temperature;
+      displayText = `${displayValue}`;
+    } else {
+      // Default fallback
+      displayValue = temperature;
+      displayText = `${displayValue}`;
+    }
+
+    // Format the display value (you can customize this formatting)
+    if (typeof displayValue === "number") {
+      const formattedValue = displayValue.toFixed(1);
+      if (selectedValue === "temperature") {
+        displayText = displayText.replace(
+          displayValue.toString(),
+          formattedValue + "°C"
+        );
+      } else {
+        displayText = displayText.replace(
+          displayValue.toString(),
+          formattedValue
+        );
+      }
+    } else if (selectedValue === "temperature") {
+      displayText = displayText + "°C";
+    }
+
+    this.attr("controlPanelTempText", {
+      x: 90 * scaleX,
+      y: 170 * scaleY,
+      text: displayText,
+      fontSize: 70 * minScale,
+      fontFamily: "Arial",
+      fill: "#333",
+      fontWeight: "bold",
+      originX: "center",
+      originY: "center",
+    });
+  }
+
   scalePath(pathData, scaleX, scaleY) {
     return pathData.replace(
       /([MLCQAZHV])([^MLCQAZHV]*)/g,
@@ -639,12 +702,51 @@ class HeatPump extends joint.dia.Element {
     );
   }
 
+  setSelectedValue(value) {
+    this.set("selectedValue", value);
+  }
+
+  // NEW METHOD: Update device data and refresh display
+  updateDeviceData(data) {
+    this.set("deviceData", data);
+  }
+
   get power() {
     return this.get("power") || 0;
   }
 
   set power(value) {
     this.set("power", value);
+  }
+
+  get temperature() {
+    return this.get("temperature") || 0;
+  }
+
+  set temperature(value) {
+    this.set("temperature", value);
+  }
+
+  set(key, value, options) {
+    const result = super.set(key, value, options);
+
+    if (typeof key === "object") {
+      if (
+        key.selectedValue !== undefined ||
+        key.deviceData !== undefined ||
+        key.temperature !== undefined
+      ) {
+        this.updateTemperatureDisplay();
+      }
+    } else if (
+      key === "selectedValue" ||
+      key === "deviceData" ||
+      key === "temperature"
+    ) {
+      this.updateTemperatureDisplay();
+    }
+
+    return result;
   }
 }
 const HeatPumpView = joint.dia.ElementView.extend({
@@ -911,12 +1013,13 @@ const DashboardEditor = () => {
 
   const [heightScale, setHeightScale] = useState(100); // Add this state
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
-  const [loadingExistingDashboard, setLoadingExistingDashboard] = useState(false);
+  const [loadingExistingDashboard, setLoadingExistingDashboard] =
+    useState(false);
   const [existingDashboard, setExistingDashboard] = useState(null);
   const [loadError, setLoadError] = useState("");
   const setInspectorContainer = (newValue) => {
-  inspectorContainerRef.current = newValue;
-};
+    inspectorContainerRef.current = newValue;
+  };
   const handleStartAnimation = () => {
     if (!selectedCell) return;
 
@@ -1023,7 +1126,9 @@ const DashboardEditor = () => {
           if (typeof value !== "undefined") {
             let displayText;
             try {
-              const modelName = formatKey(selectedValue.length > 0 ? selectedValue[0] : '') || "Device";
+              const modelName =
+                formatKey(selectedValue.length > 0 ? selectedValue[0] : "") ||
+                "Device";
               if (typeof value === "number") {
                 // Format numbers with 2 decimal places
                 displayText = `${modelName}: ${value}`;
@@ -1037,12 +1142,99 @@ const DashboardEditor = () => {
                 // Default case for strings and other types
                 displayText = `${modelName}: ${value}`;
               }
+              if (cell.get("type") === "CoolingPlate") {
+                cell.setSelectedValue(selectedValue);
+                cell.updateDeviceData({ [selectedValue]: value });
+
+                // Also update temperature property if selectedValue is temperature
+                if (selectedValue === "temperature") {
+                  cell.set("temperature", value);
+                  updateElementAttributes(cellId, { temperature: value });
+                }
+              } else if (cell.get("type") === "PlantChiller") {
+                cell.setSelectedValue(selectedValue);
+                cell.updateDeviceData({ [selectedValue]: value });
+                if (selectedValue === "temperature") {
+                  cell.set("temperature", value);
+                  updateElementAttributes(cellId, { temperature: value });
+                }
+              } else if (cell.get("type") === "HeatPump") {
+                cell.setSelectedValue(selectedValue);
+                cell.updateDeviceData({ [selectedValue]: value });
+                if (selectedValue === "temperature") {
+                  cell.set("temperature", value);
+                  updateElementAttributes(cellId, { temperature: value });
+                }
+              } else if (cell.get("type") === "VatWithAgitator") {
+                cell.setSelectedValue(selectedValue);
+                cell.updateDeviceData({ [selectedValue]: value });
+                if (selectedValue === "temperature") {
+                  cell.set("temperature", value);
+                  updateElementAttributes(cellId, { temperature: value });
+                }
+              } else {
+                // For other cell types, use the label
+                cell.attr("label/text", displayText);
+              }
               cell.attr("label/text", displayText);
             } catch (labelError) {
               console.error("Error formatting label:", labelError);
               // cell.attr("label/text", "Error: Invalid Value");
             }
 
+            if (cell.get("type") === "CoolingPlate") {
+              // Also update temperature property if selectedValue is temperature
+              if (
+                typeof value === "number" &&
+                selectedValue === "temperature"
+              ) {
+                cell.set("temperature", value);
+                // updateElementAttributes(selectedElement, {
+                //   ...elementData,
+                //   temperature: value,
+                // });
+              }
+            }
+
+            if (cell.get("type") === "PlantChiller") {
+              // Also update temperature property if selectedValue is temperature
+              if (
+                typeof value === "number" &&
+                selectedValue === "temperature"
+              ) {
+                cell.set("temperature", value);
+                // updateElementAttributes(selectedElement, {
+                //   ...elementData,
+                //   temperature: value,
+                // });
+              }
+            }
+            if (cell.get("type") === "HeatPump") {
+              // Also update temperature property if selectedValue is temperature
+              if (
+                typeof value === "number" &&
+                selectedValue === "temperature"
+              ) {
+                cell.set("temperature", value);
+                // updateElementAttributes(selectedElement, {
+                //   ...elementData,
+                //   temperature: value,
+                // });
+              }
+            }
+            if (cell.get("type") === "VatWithAgitator") {
+              // Also update temperature property if selectedValue is temperature
+              if (
+                typeof value === "number" &&
+                selectedValue === "temperature"
+              ) {
+                cell.set("temperature", value);
+                // updateElementAttributes(selectedElement, {
+                //   ...elementData,
+                //   temperature: value,
+                // });
+              }
+            }
             if (typeof value === "number" && selectedValue.includes("level")) {
               // Scale the tank height based on the value
               const tankPercentage = (value / 100) * 100; // Assuming value is 0-100
@@ -1062,7 +1254,10 @@ const DashboardEditor = () => {
               //  const normalizedValue = Math.min(Math.max(value / 100, 0), 1);
               //  const hue = (1 - normalizedValue) * 120;
               //  cell.attr("body/fill", `hsl(${hue}, 100%, 80%)`);
-            } else if (selectedValue.includes("magnet_status") && value == "open") {
+            } else if (
+              selectedValue.includes("magnet_status") &&
+              value == "open"
+            ) {
               const isOpen = value === "open";
               updateElementAttributes(selectedElement, {
                 magnet_status: "open",
@@ -1076,7 +1271,10 @@ const DashboardEditor = () => {
               //  if (imageEl) {
               //    imageEl.style.animationDuration = `${2 / animationSpeed}s`;
               //  }
-            } else if (selectedValue.includes("running_status") && value == "on") {
+            } else if (
+              selectedValue.includes("running_status") &&
+              value == "on"
+            ) {
               turnOn(selectedElement);
               selectedCell.tankVolumeUpAnimation();
               const imageEl = document.querySelector(
@@ -1139,7 +1337,17 @@ const DashboardEditor = () => {
           }
         } catch (error) {
           console.error("Error updating cell display:", error);
-          cell.attr("label/text", "Error: Update Failed");
+          if (cell.get("type") === "CoolingPlate") {
+            cell.updateDeviceData({ [selectedValue]: "Error" });
+          } else if (cell.get("type") === "PlantChiller") {
+            cell.updateDeviceData({ [selectedValue]: "Error" });
+          } else if (cell.get("type") === "HeatPump") {
+            cell.updateDeviceData({ [selectedValue]: "Error" });
+          } else if (cell.get("type") === "VatWithAgitator") {
+            cell.updateDeviceData({ [selectedValue]: "Error" });
+          } else {
+            cell.attr("label/text", "Error: Update Failed");
+          }
         }
       }
     );
@@ -1171,11 +1379,17 @@ const DashboardEditor = () => {
               setAvailableValues(payloadKeys);
               console.log("payloadKeys", payloadKeys);
               console.log("selectedValuew", selectedValue);
-              if (!selectedValue || selectedValue.length === 0 || !selectedValue.some(val => payloadKeys.includes(val))) {
+              if (
+                !selectedValue ||
+                selectedValue.length === 0 ||
+                !selectedValue.some((val) => payloadKeys.includes(val))
+              ) {
                 setSelectedValue([payloadKeys[0]]);
               }
             }
-            const sensorDataToUse = payloadKeys[0] || (selectedValue.length > 0 ? selectedValue[0] : null);
+            const sensorDataToUse =
+              payloadKeys[0] ||
+              (selectedValue.length > 0 ? selectedValue[0] : null);
 
             console.log("sensorDataToUse", sensorDataToUse);
             if (sensorDataToUse) {
@@ -1184,6 +1398,56 @@ const DashboardEditor = () => {
                 deviceId,
                 sensorDataToUse,
                 (value) => {
+                  const modelName = sensorDataToUse || "Device";
+
+                  if (cell.get("type") === "CoolingPlate") {
+                    cell.setSelectedValue(sensorDataToUse);
+                    cell.updateDeviceData({ [sensorDataToUse]: value });
+
+                    if (sensorDataToUse === "temperature") {
+                      cell.set("temperature", value);
+                      updateElementAttributes(cellId, { temperature: value });
+                    }
+                  } else {
+                    // Handle other cell types
+                    cell.attr("label/text", `${modelName}: ${value}`);
+                  }
+                  if (cell.get("type") === "PlantChiller") {
+                    // Handle PlantChiller updates
+                    cell.setSelectedValue(sensorDataToUse);
+                    cell.updateDeviceData({ [sensorDataToUse]: value });
+
+                    if (sensorDataToUse === "temperature") {
+                      cell.set("temperature", value);
+                      updateElementAttributes(cellId, { temperature: value });
+                    }
+
+                    if (cell.get("type") === "HeatPump") {
+                      // Handle PlantChiller updates
+                      cell.setSelectedValue(sensorDataToUse);
+                      cell.updateDeviceData({ [sensorDataToUse]: value });
+
+                      if (sensorDataToUse === "temperature") {
+                        cell.set("temperature", value);
+                        updateElementAttributes(cellId, { temperature: value });
+                      }
+                    }
+                  } else {
+                    // Handle other cell types
+                    cell.attr("label/text", `${modelName}: ${value}`);
+                  }
+                  if (cell.get("type") === "VatWithAgitator") {
+                    cell.setSelectedValue(sensorDataToUse);
+                    cell.updateDeviceData({ [sensorDataToUse]: value });
+
+                    if (sensorDataToUse === "temperature") {
+                      cell.set("temperature", value);
+                      updateElementAttributes(cellId, { temperature: value });
+                    }
+                  } else {
+                    // Handle other cell types
+                    cell.attr("label/text", `${modelName}: ${value}`);
+                  }
                   if (typeof value !== "undefined") {
                     const modelName = sensorDataToUse || "Device";
                     cell.attr("label/text", `${modelName}: ${value}`);
@@ -1272,8 +1536,8 @@ const DashboardEditor = () => {
   // Load existing dashboard if ID is provided in URL
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
-    const dashboardId = searchParams.get('id');
-    
+    const dashboardId = searchParams.get("id");
+
     if (dashboardId && user?.uid) {
       loadExistingDashboard(dashboardId);
     }
@@ -1283,51 +1547,52 @@ const DashboardEditor = () => {
     try {
       setLoadingExistingDashboard(true);
       setLoadError("");
-      
+
       // Get dashboard metadata from Firestore
       const dashboards = await getDashboardsFromFirestore(user?.uid);
-      const dashboard = dashboards.find(d => d.id === dashboardId);
-      
+      const dashboard = dashboards.find((d) => d.id === dashboardId);
+
       if (!dashboard) {
-        throw new Error('Dashboard not found');
+        throw new Error("Dashboard not found");
       }
 
-      console.log('dashboard', dashboard);
-      
+      console.log("dashboard", dashboard);
+
       setExistingDashboard(dashboard);
-      
+
       // Load the dashboard file from Firebase Storage using the SDK
       if (dashboard.filepath) {
         try {
           // Directly fetch the URL you already have
           const response = await fetch(dashboard.filepath);
-          
-          console.log('dashboardData', response);
+
+          console.log("dashboardData", response);
           if (!response.ok) {
-            throw new Error('Failed to load dashboard file from URL');
+            throw new Error("Failed to load dashboard file from URL");
           }
-      
+
           const dashboardData = await response.json();
- 
-          console.log('Dashboard data loaded:', dashboardData);
-       
-           // Load the graph data into the paper
-           if (paperRef.current && dashboardData) {
-             paperRef.current.model.fromJSON(dashboardData);
-             console.log('Dashboard loaded successfully via fetch:', dashboardData);
-           }
-       
-           // Update current file name
-           setCurrentFileName(dashboard.fileName || 'Untitled.joint');
-      
+
+          console.log("Dashboard data loaded:", dashboardData);
+
+          // Load the graph data into the paper
+          if (paperRef.current && dashboardData) {
+            paperRef.current.model.fromJSON(dashboardData);
+            console.log(
+              "Dashboard loaded successfully via fetch:",
+              dashboardData
+            );
+          }
+
+          // Update current file name
+          setCurrentFileName(dashboard.fileName || "Untitled.joint");
         } catch (error) {
-          console.error('Failed to load dashboard from URL:', error);
-          throw new Error('Could not load the dashboard file.');
+          console.error("Failed to load dashboard from URL:", error);
+          throw new Error("Could not load the dashboard file.");
         }
       }
-      
     } catch (error) {
-      console.error('Error loading dashboard:', error);
+      console.error("Error loading dashboard:", error);
       setLoadError(`Failed to load dashboard: ${error.message}`);
     } finally {
       setLoadingExistingDashboard(false);
@@ -1745,9 +2010,9 @@ const DashboardEditor = () => {
       );
     });
 
-    paper.on("element:pointerclick", (elementView) => {
-      elementView.removeTools();
-    });
+    // paper.on("element:pointerclick", (elementView) => {
+    //   elementView.removeTools();
+    // });
 
     let currentLinkToolsView;
 
@@ -1883,33 +2148,33 @@ const DashboardEditor = () => {
     });
 
     const stencilElements = [
-      {
-        type: "custom.TemplateImage",
-        svg: MotorPumpSVG,
-        size: { width: 80, height: 60 },
-        cloneSize: { width: 200, height: 200 },
-        attrs: {
-          image: {
-            "data-animated": false,
-            class: "",
-          },
-        },
-        contextMenu: [
-          {
-            content: "Pulse Animation",
-            action: (cellView) => cellView.model.pulse(),
-          },
-          {
-            content: "Rotate Animation",
-            action: (cellView) => cellView.model.rotate(),
-          },
-          "-",
-          {
-            content: "Stop Animation",
-            action: (cellView) => cellView.model.stopAnimation(),
-          },
-        ],
-      },
+      // {
+      //   type: "custom.TemplateImage",
+      //   svg: MotorPumpSVG,
+      //   size: { width: 80, height: 60 },
+      //   cloneSize: { width: 200, height: 200 },
+      //   attrs: {
+      //     image: {
+      //       "data-animated": false,
+      //       class: "",
+      //     },
+      //   },
+      //   contextMenu: [
+      //     {
+      //       content: "Pulse Animation",
+      //       action: (cellView) => cellView.model.pulse(),
+      //     },
+      //     {
+      //       content: "Rotate Animation",
+      //       action: (cellView) => cellView.model.rotate(),
+      //     },
+      //     "-",
+      //     {
+      //       content: "Stop Animation",
+      //       action: (cellView) => cellView.model.stopAnimation(),
+      //     },
+      //   ],
+      // },
       {
         type: "standard.Rectangle",
         size: { width: 100, height: 60 },
@@ -1946,7 +2211,6 @@ const DashboardEditor = () => {
       new CoolingPlate({
         position: { x: 10, y: 10 },
         size: { width: 80, height: 112 },
-
         cloneSize: { width: 321, height: 512 },
         ports: {
           items: [
@@ -2004,7 +2268,7 @@ const DashboardEditor = () => {
       new IceBank({
         position: { x: 10, y: 10 },
         size: { width: 100, height: 80 },
-        cloneSize: { width: 270, height: 200 },
+        cloneSize: { width: 390, height: 280 },
         ports: {
           items: [
             { id: "in1", group: "in" },
@@ -2057,13 +2321,6 @@ const DashboardEditor = () => {
         cloneSize: { width: 200, height: 200 },
         attrs: {},
       },
-      // {
-      //   type: "custom.TemplateImage",
-      //   svg: CoolingPlate,
-      //   size: { width: 80, height: 60 },
-      //   cloneSize: { width: 200, height: 250 },
-      //   attrs: {},
-      // },
       {
         type: "custom.TemplateImage",
         svg: VatAgitator,
@@ -2834,21 +3091,21 @@ const DashboardEditor = () => {
       },
     });
 
-    const heatPump = new HeatPump({
-      position: { x: 320, y: 250 },
-      power: 0,
-    });
-    // heatpumpRef.current = heatPump;
-    graph.addCell(heatPump);
+    // const heatPump = new HeatPump({
+    //   position: { x: 320, y: 250 },
+    //   power: 0,
+    // });
+    // // heatpumpRef.current = heatPump;
+    // graph.addCell(heatPump);
 
-    const vat = new VatWithAgitator({
-      position: { x: 320, y: 250 },
-      size: { width: 300, height: 368 },
-      waterLevel: 0.5,
-      agitatorSpeed: 0.5,
-    });
-    // vatRef.current = vat;
-    graph.addCell(vat);
+    // const vat = new VatWithAgitator({
+    //   position: { x: 320, y: 250 },
+    //   size: { width: 300, height: 368 },
+    //   waterLevel: 0,
+    //   agitatorSpeed: 0,
+    // });
+    // // vatRef.current = vat;
+    // graph.addCell(vat);
 
     const svgMarkup = {
       tagName: "svg",
@@ -3249,7 +3506,11 @@ const DashboardEditor = () => {
   };
 
   const handleValueChange = (event) => {
-    const value = typeof event.target.value === 'string' ? event.target.value.split(',') : event.target.value;
+    const newValue = event.target.value;
+    const value =
+      typeof event.target.value === "string"
+        ? event.target.value.split(",")
+        : event.target.value;
     setSelectedValue(value);
     if (selectedCell) {
       console.log(
@@ -3258,8 +3519,23 @@ const DashboardEditor = () => {
       );
       const cellId = getCellId(selectedCell);
       const data = cellDeviceData.current.get(cellId);
+      // if (selectedCell && selectedCell.get("type") === ) {
+      //   // Set the selected value type
+      //   selectedCell.setSelectedValue(newValue);
+
+      //   // Update the device data if payload exists
+      //   if (payload && Object.keys(payload).length > 0) {
+      //     selectedCell.updateDeviceData(payload);
+      //   }
+
+      //   // If the selected value is 'temperature' and exists in payload,
+      //   // also update the temperature property directly
+      //   if (newValue === "temperature" && payload[newValue] !== undefined) {
+      //     selectedCell.set("temperature", payload[newValue]);
+      //   }
+      // }
       if (data) {
-        //  updateCellDisplay(selectedCell, data);
+        //updateCellDisplay(selectedCell, data);
       }
     }
   };
@@ -3268,21 +3544,31 @@ const DashboardEditor = () => {
     if (elements[element.id]) {
       return;
     }
+
+    const currentTemperature = element.get("temperature") || 0;
     const defaultAttributes = {
       isRunning: false,
-      power: 1,
-      waterLevel: 0.5,
-      agitatorSpeed: 0.2,
+      power: 0,
+      waterLevel: 0.0,
+      agitatorSpeed: 0.0,
       magnet_status: "close",
+      temperature: currentTemperature,
     };
 
     if (element instanceof HeatPump) {
-      defaultAttributes.power = 1;
+      defaultAttributes.power = 0;
     } else if (element instanceof VatWithAgitator) {
-      defaultAttributes.waterLevel = 0.5;
-      defaultAttributes.agitatorSpeed = 0.2;
+      defaultAttributes.temperature = 0.0;
+      defaultAttributes.waterLevel = 0.0;
+      defaultAttributes.agitatorSpeed = 0.0;
     } else if (element instanceof MotorPump) {
       defaultAttributes.magnet_status = "close";
+    } else if (element instanceof CoolingPlate) {
+      defaultAttributes.temperature = 0.0;
+    } else if (element instanceof PlantChiller) {
+      defaultAttributes.temperature = 0.0;
+    } else if (element instanceof HeatPump) {
+      defaultAttributes.temperature = 0.0;
     }
 
     setElements((prev) => ({
@@ -3316,6 +3602,7 @@ const DashboardEditor = () => {
         console.log("[React] Updated element:", updated[id]);
 
         const element = updated[id].element;
+        const elementType = updated[id].type;
         console.log("[React] JointJS element:", element);
 
         if (attributes.power !== undefined) {
@@ -3334,6 +3621,54 @@ const DashboardEditor = () => {
             "rotator/fill",
             attributes.isRunning ? "#52C54C" : "#C9C9C9"
           );
+        }
+
+        if (
+          elementType === "CoolingPlate" &&
+          attributes.temperature !== undefined &&
+          element
+        ) {
+          console.log(
+            "Setting temperature on CoolingPlate:",
+            attributes.temperature
+          );
+          element.set("temperature", attributes.temperature);
+        }
+
+        if (
+          elementType === "PlantChiller" &&
+          attributes.temperature !== undefined &&
+          element
+        ) {
+          console.log(
+            "Setting temperature on PlantChiller:",
+            attributes.temperature
+          );
+          element.set("temperature", attributes.temperature);
+        }
+
+        if (
+          elementType === "HeatPump" &&
+          attributes.temperature !== undefined &&
+          element
+        ) {
+          console.log(
+            "Setting temperature on HeatPump:",
+            attributes.temperature
+          );
+          element.set("temperature", attributes.temperature);
+        }
+
+        if (
+          elementType === "VatWithAgitator" &&
+          attributes.temperature !== undefined &&
+          element
+        ) {
+          console.log(
+            "Setting temperature on VatWithAgitator:",
+            attributes.temperature
+          );
+          element.set("temperature", attributes.temperature);
         }
 
         if (attributes.waterLevel !== undefined) {
@@ -3450,6 +3785,8 @@ const DashboardEditor = () => {
   };
 
   const toggleRunning = (id) => {
+    const defaults = {};
+    const type = elements[id].type;
     console.log("[React] toggleRunning called for id:", id);
     const current = elements[id]?.isRunning || false;
     const newPower = current ? 0 : 1;
@@ -3459,6 +3796,36 @@ const DashboardEditor = () => {
       isRunning: !current,
       power: newPower,
     });
+
+    if (type === "VatWithAgitator") {
+      updateElementAttributes(id, {
+        power: newPower,
+        temperature: 0,
+      });
+    }
+    if (type === "CoolingPlate") {
+      updateElementAttributes(id, {
+        power: newPower,
+        temperature: 0,
+      });
+    }
+    if (type === "PlantChiller") {
+      updateElementAttributes(id, {
+        power: newPower,
+        temperature: 0,
+      });
+    }
+    if (type === "HeatPump") {
+      updateElementAttributes(id, {
+        power: newPower,
+        temperature: 0,
+      });
+    }
+    if (type === "IceBank") {
+      updateElementAttributes(id, {
+        power: newPower,
+      });
+    }
   };
 
   const turnOn = (id) => {
@@ -3704,8 +4071,8 @@ const DashboardEditor = () => {
           }}
         >
           <Toolbar>
-            <IconButton 
-              color="inherit" 
+            <IconButton
+              color="inherit"
               onClick={() => navigate("/dashboard")}
               sx={{ mr: 2 }}
             >
@@ -3714,27 +4081,37 @@ const DashboardEditor = () => {
             <Typography variant="h6" sx={{ flexGrow: 1 }}>
               Dashboard Editor
               {loadingExistingDashboard && (
-                <Box component="span" sx={{ ml: 2, display: 'inline-flex', alignItems: 'center', gap: 1 }}>
+                <Box
+                  component="span"
+                  sx={{
+                    ml: 2,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 1,
+                  }}
+                >
                   <CircularProgress size={16} />
                   Loading...
                 </Box>
               )}
               {loadError && (
-                <Box component="span" sx={{ ml: 2, color: 'error.main', fontSize: '0.875rem' }}>
+                <Box
+                  component="span"
+                  sx={{ ml: 2, color: "error.main", fontSize: "0.875rem" }}
+                >
                   {loadError}
                 </Box>
               )}
             </Typography>
 
-
-            <IconButton 
-              color="inherit" 
+            <IconButton
+              color="inherit"
               onClick={() => setSaveDialogOpen(true)}
               sx={{ mr: 2 }}
             >
               <Save size={20} />
             </IconButton>
-            
+
             <Button
               color="inherit"
               onClick={handleMenuClick}
@@ -3921,18 +4298,29 @@ const DashboardEditor = () => {
                 </FormControl>
                 {selectedDevice && Object.keys(payload).length > 0 && (
                   <FormControl component="fieldset" fullWidth>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                      <Typography variant="subtitle2">Display Value:</Typography>
-                      <Box sx={{ display: 'flex', gap: 1 }}>
-                        <Button 
-                          size="small" 
+                    <Box
+                      sx={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        mb: 1,
+                      }}
+                    >
+                      <Typography variant="subtitle2">
+                        Display Value:
+                      </Typography>
+                      <Box sx={{ display: "flex", gap: 1 }}>
+                        <Button
+                          size="small"
                           onClick={() => setSelectedValue(availableValues)}
-                          disabled={selectedValue.length === availableValues.length}
+                          disabled={
+                            selectedValue.length === availableValues.length
+                          }
                         >
                           Select All
                         </Button>
-                        <Button 
-                          size="small" 
+                        <Button
+                          size="small"
                           onClick={() => setSelectedValue([])}
                           disabled={selectedValue.length === 0}
                         >
@@ -3947,19 +4335,23 @@ const DashboardEditor = () => {
                       size="small"
                       displayEmpty
                       renderValue={(selected) => (
-                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                        <Box
+                          sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}
+                        >
                           {selected.length === 0 ? (
                             <Typography variant="body2" color="text.secondary">
                               Select values...
                             </Typography>
                           ) : (
                             selected.map((value) => (
-                              <Chip 
-                                key={value} 
-                                label={value} 
+                              <Chip
+                                key={value}
+                                label={value}
                                 size="small"
                                 onDelete={() => {
-                                  const newValue = selectedValue.filter(v => v !== value);
+                                  const newValue = selectedValue.filter(
+                                    (v) => v !== value
+                                  );
                                   setSelectedValue(newValue);
                                 }}
                                 onMouseDown={(event) => {
@@ -3980,7 +4372,7 @@ const DashboardEditor = () => {
                   </FormControl>
                 )}
 
-                <FormControl fullWidth sx={{ mb: 2, mt: 1 }}>
+                {/* <FormControl fullWidth sx={{ mb: 2, mt: 1 }}>
                   <InputLabel>Animation Type</InputLabel>
                   <Select
                     value={animationType}
@@ -4010,7 +4402,7 @@ const DashboardEditor = () => {
                       sx={{ mt: 1 }}
                     />
                   </Box>
-                )}
+                )} */}
 
                 {/* {selectedDevice && Object.keys(payload).length > 0 && (
                   <FormControl component="fieldset">
@@ -4105,6 +4497,138 @@ const DashboardEditor = () => {
                             Reset
                           </Button>
                         </Stack>
+                      </Stack>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {elementData.type === "CoolingPlate" && (
+                  <Card elevation={3}>
+                    <CardContent>
+                      <Stack
+                        direction="row"
+                        alignItems="center"
+                        spacing={1}
+                        mb={2}
+                      >
+                        <Settings color="primary" />
+                        <Typography variant="h6">
+                          Cooling Plate Controls
+                        </Typography>
+                      </Stack>
+                      <div className="text-xs mt-2">
+                        Status: {elementData.power ? "ON" : "OFF"}
+                      </div>
+
+                      <Stack spacing={3}>
+                        {/* Status */}
+                        <Box>
+                          <FormControlLabel
+                            control={
+                              <Switch
+                                checked={elementData.power}
+                                onChange={() => {
+                                  // Toggle between on/off states
+                                  if (elementData.power) {
+                                    toggleRunning(selectedElement);
+                                  } else {
+                                    toggleRunning(selectedElement);
+                                  }
+                                }}
+                                color="primary"
+                              />
+                            }
+                            label={elementData.power ? "Power ON" : "Power OFF"}
+                          />
+                        </Box>
+                      </Stack>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {elementData.type === "PlantChiller" && (
+                  <Card elevation={3}>
+                    <CardContent>
+                      <Stack
+                        direction="row"
+                        alignItems="center"
+                        spacing={1}
+                        mb={2}
+                      >
+                        <Settings color="primary" />
+                        <Typography variant="h6">
+                          Plant Chiller Controls
+                        </Typography>
+                      </Stack>
+                      <div className="text-xs mt-2">
+                        Status: {elementData.power ? "ON" : "OFF"}
+                      </div>
+
+                      <Stack spacing={3}>
+                        {/* Status */}
+                        <Box>
+                          <FormControlLabel
+                            control={
+                              <Switch
+                                checked={elementData.power}
+                                onChange={() => {
+                                  // Toggle between on/off states
+                                  if (elementData.power) {
+                                    toggleRunning(selectedElement);
+                                  } else {
+                                    toggleRunning(selectedElement);
+                                  }
+                                }}
+                                color="primary"
+                              />
+                            }
+                            label={elementData.power ? "Power ON" : "Power OFF"}
+                          />
+                        </Box>
+                      </Stack>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {elementData.type === "IceBank" && (
+                  <Card elevation={3}>
+                    <CardContent>
+                      <Stack
+                        direction="row"
+                        alignItems="center"
+                        spacing={1}
+                        mb={2}
+                      >
+                        <Settings color="primary" />
+                        <Typography variant="h6">
+                          Plant Chiller Controls
+                        </Typography>
+                      </Stack>
+                      <div className="text-xs mt-2">
+                        Status: {elementData.power ? "ON" : "OFF"}
+                      </div>
+
+                      <Stack spacing={3}>
+                        {/* Status */}
+                        <Box>
+                          <FormControlLabel
+                            control={
+                              <Switch
+                                checked={elementData.power}
+                                onChange={() => {
+                                  // Toggle between on/off states
+                                  if (elementData.power) {
+                                    toggleRunning(selectedElement);
+                                  } else {
+                                    toggleRunning(selectedElement);
+                                  }
+                                }}
+                                color="primary"
+                              />
+                            }
+                            label={elementData.power ? "Power ON" : "Power OFF"}
+                          />
+                        </Box>
                       </Stack>
                     </CardContent>
                   </Card>
@@ -4219,7 +4743,7 @@ const DashboardEditor = () => {
                   </Card>
                 )}
 
-                <Box className="animation-controls">
+                {/* <Box className="animation-controls">
                   <Typography variant="subtitle2">
                     Animation Controls
                   </Typography>
@@ -4277,7 +4801,7 @@ const DashboardEditor = () => {
                       Stop
                     </Button>
                   </Box>
-                </Box>
+                </Box> */}
 
                 <Box
                   ref={inspectorContainerRef}
@@ -4293,28 +4817,28 @@ const DashboardEditor = () => {
           </Box>
         </Box>
       </Box>
-      
+
       <SaveDialog
         open={saveDialogOpen}
         onClose={() => setSaveDialogOpen(false)}
         existingDashboard={existingDashboard}
         onSave={(formData) => {
           setCurrentFileName(formData.fileName);
-          
+
           // If this is the final save with Firestore ID, navigate back to dashboard
           if (formData.firestoreId) {
             console.log("Dashboard saved successfully to Firestore:", formData);
             // Navigate back to dashboard with success data
-            navigate("/dashboard", { 
-              state: { 
+            navigate("/dashboard", {
+              state: {
                 savedDashboard: formData,
                 showSuccess: true,
-                isUpdate: existingDashboard ? true : false
-              } 
+                isUpdate: existingDashboard ? true : false,
+              },
             });
             return null; // No need to return data for final save
           }
-          
+
           // Get the current dashboard data from the paper for initial save
           if (paperRef.current) {
             const str = paperRef.current.model.toJSON();
@@ -4322,20 +4846,24 @@ const DashboardEditor = () => {
               graph: str,
               metadata: formData,
               timestamp: new Date().toISOString(),
-              version: existingDashboard ? (parseFloat(existingDashboard.version || "1.0") + 0.1).toFixed(1) : "1.0",
+              version: existingDashboard
+                ? (
+                    parseFloat(existingDashboard.version || "1.0") + 0.1
+                  ).toFixed(1)
+                : "1.0",
               isUpdate: existingDashboard ? true : false,
-              originalId: existingDashboard?.id || null
+              originalId: existingDashboard?.id || null,
             };
-            
+
             console.log("Saving dashboard with data:", formData);
             console.log("Dashboard content:", dashboardData);
             console.log("Paper model JSON:", str);
             console.log("Is update:", existingDashboard ? true : false);
-            
+
             // Return the dashboard data for upload
             return dashboardData;
           }
-          
+
           return null;
         }}
         currentFileName={currentFileName}
