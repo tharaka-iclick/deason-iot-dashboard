@@ -551,7 +551,6 @@ class VatWithAgitator extends joint.dia.Element {
     this.updateTemperatureDisplay();
   }
 
-  // NEW METHOD: Update temperature display
   updateTemperatureDisplay() {
     const size = this.get("size");
     const scaleX = size.width / 617;
@@ -564,45 +563,57 @@ class VatWithAgitator extends joint.dia.Element {
 
     let displayValue;
     let displayText;
-    let displayLabel; // New variable for label only
+    let displayLabel;
 
-    if (selectedValue && deviceData[selectedValue] !== undefined) {
+    // Helper function to get the primary selected value
+    const getPrimaryValue = (value) => {
+      if (Array.isArray(value) && value.length > 0) {
+        return value[0];
+      }
+      return value;
+    };
+
+    // Helper function to format label text
+    const formatLabel = (value) => {
+      if (!value || typeof value !== "string") {
+        return "TEMPERATURE:";
+      }
+      return value.toUpperCase() + ":";
+    };
+
+    const primaryValue = getPrimaryValue(selectedValue);
+
+    if (primaryValue && deviceData[primaryValue] !== undefined) {
       // If a specific value is selected and exists in device data, use it
-      displayValue = deviceData[selectedValue];
+      displayValue = deviceData[primaryValue];
       displayText = `${displayValue}`;
-      displayLabel = `${selectedValue.toUpperCase()}:`; // Extract label only
-    } else if (selectedValue === "temperature" && temperature !== undefined) {
+      displayLabel = formatLabel(primaryValue);
+    } else if (primaryValue === "temperature" && temperature !== undefined) {
       // If temperature is specifically selected, use the temperature property
       displayValue = temperature;
       displayText = `${displayValue}°C`;
-      displayLabel = "TEMPERATURE:"; // Set label only
+      displayLabel = "TEMPERATURE:";
     } else {
       // Default fallback
       displayValue = temperature;
       displayText = `${displayValue}`;
-      displayLabel = "TEMPERATURE:"; // Set label only
+      displayLabel = "TEMPERATURE:";
     }
 
-    // Format the display value (you can customize this formatting)
+    // Format the display value
     if (typeof displayValue === "number") {
       const formattedValue = displayValue.toFixed(1);
-      if (selectedValue === "temperature") {
-        displayText = displayText.replace(
-          displayValue.toString(),
-          formattedValue + "°C"
-        );
+      if (primaryValue === "temperature") {
+        displayText = formattedValue + "°C";
       } else {
-        displayText = displayText.replace(
-          displayValue.toString(),
-          formattedValue
-        );
+        displayText = formattedValue;
       }
-    } else if (selectedValue === "temperature") {
+    } else if (primaryValue === "temperature") {
       displayText = displayText + "°C";
     }
 
     this.attr("tempLevelDisplayLable", {
-      text: displayLabel, // Show only the label (e.g., "TEMPERATURE:")
+      text: displayLabel,
       fontSize: 65 * minScale,
       fontWeight: "bold",
       fontFamily: "Arial",

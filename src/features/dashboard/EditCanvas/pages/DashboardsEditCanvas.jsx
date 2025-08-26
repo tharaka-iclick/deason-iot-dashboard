@@ -1381,10 +1381,10 @@ const DashboardEditor = () => {
               // Don't automatically select the first value
               // Let the user manually select which value they want to display
             }
-            
+
             // Only use sensor data if a value is already selected
-            const sensorDataToUse = 
-              (selectedValue.length > 0 ? selectedValue[0] : null);
+            const sensorDataToUse =
+              selectedValue.length > 0 ? selectedValue[0] : null;
 
             console.log("sensorDataToUse", sensorDataToUse);
             if (sensorDataToUse) {
