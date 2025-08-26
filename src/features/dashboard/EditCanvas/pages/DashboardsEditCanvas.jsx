@@ -3892,7 +3892,7 @@ const DashboardEditor = () => {
 
               <Stack spacing={3}>
                 {/* Status */}
-                <Box>
+                {/* <Box>
                   <FormControlLabel
                     control={
                       <Switch
@@ -3907,7 +3907,7 @@ const DashboardEditor = () => {
                         : "Agitator Stopped"
                     }
                   />
-                </Box>
+                </Box> */}
 
                 {/* Water Level */}
                 <Box>
@@ -3960,14 +3960,14 @@ const DashboardEditor = () => {
 
                 {/* Control Buttons */}
                 <Stack direction="row" spacing={2}>
-                  <Button
+                  {/* <Button
                     variant="outlined"
                     startIcon={<Refresh />}
                     onClick={() => resetElement(selectedElement)}
                     fullWidth
                   >
                     Reset to Defaults
-                  </Button>
+                  </Button> */}
                 </Stack>
               </Stack>
             </CardContent>
@@ -4502,14 +4502,14 @@ const DashboardEditor = () => {
                             {elementData.isRunning ? "Stop" : "Start"}
                           </Button>
 
-                          <Button
+                          {/* <Button
                             variant="outlined"
                             startIcon={<Refresh />}
                             onClick={() => resetElement(selectedElement)}
                             fullWidth
                           >
                             Reset
-                          </Button>
+                          </Button> */}
                         </Stack>
                       </Stack>
                     </CardContent>
@@ -4741,14 +4741,14 @@ const DashboardEditor = () => {
 
                         {/* Control Buttons */}
                         <Stack direction="row" spacing={2}>
-                          <Button
+                          {/* <Button
                             variant="outlined"
                             startIcon={<Refresh />}
                             onClick={() => resetElement(selectedElement)}
                             fullWidth
                           >
                             Reset to Defaults
-                          </Button>
+                          </Button> */}
                         </Stack>
                       </Stack>
                     </CardContent>

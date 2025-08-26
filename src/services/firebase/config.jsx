@@ -9,7 +9,7 @@ const firebaseConfig = {
   authDomain: "test-scopious.firebaseapp.com",
   databaseURL: "https://test-scopious-default-rtdb.firebaseio.com",
   projectId: "test-scopious",
-  storageBucket: "test-scopious.appspot.com",
+  storageBucket: "test-scopious.firebasestorage.app",
   messagingSenderId: "356950590687",
   appId: "1:356950590687:web:82ebc8c776ff557d5c956a",
   measurementId: "G-D4QDN1LQJE",
@@ -26,11 +26,11 @@ const firebaseConfigV2 = {
 }
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-const appV2 = initializeApp(firebaseConfigV2, 'appV2');
+//const appV2 = initializeApp(firebaseConfigV2, 'appV2');
 
 const db = getDatabase(app);
 const auth = getAuth(app);
-const storage = getStorage(appV2);
+const storage = getStorage(app);
 const firestore = getFirestore(app);
 
 export { db, auth, storage, firestore };
