@@ -1374,22 +1374,16 @@ const DashboardEditor = () => {
             setPayload(data);
 
             const payloadKeys = Object.keys(data || {});
-            const selectedValue = payloadKeys;
 
             if (payloadKeys.length > 0) {
               setAvailableValues(payloadKeys);
               console.log("payloadKeys", payloadKeys);
-              console.log("selectedValuew", selectedValue);
-              if (
-                !selectedValue ||
-                selectedValue.length === 0 ||
-                !selectedValue.some((val) => payloadKeys.includes(val))
-              ) {
-                setSelectedValue([payloadKeys[0]]);
-              }
+              // Don't automatically select the first value
+              // Let the user manually select which value they want to display
             }
-            const sensorDataToUse =
-              payloadKeys[0] ||
+            
+            // Only use sensor data if a value is already selected
+            const sensorDataToUse = 
               (selectedValue.length > 0 ? selectedValue[0] : null);
 
             console.log("sensorDataToUse", sensorDataToUse);
