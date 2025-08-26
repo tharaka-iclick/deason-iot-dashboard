@@ -560,37 +560,56 @@ class CoolingPlate extends joint.dia.Element {
 
     let displayValue;
     let displayText;
-    let displayLabel; // New variable for label only
-    let displayValueOnly; // New variable for value only
+    let displayLabel;
+    let displayValueOnly;
 
-    if (selectedValue && deviceData[selectedValue] !== undefined) {
+    // Helper function to get the primary selected value
+    const getPrimaryValue = (value) => {
+      if (Array.isArray(value) && value.length > 0) {
+        return value[0];
+      }
+      return value;
+    };
+
+    // Helper function to format label text
+    const formatLabel = (value) => {
+      if (!value || typeof value !== "string") {
+        return "TEMPERATURE:";
+      }
+      return value.toUpperCase() + ":";
+    };
+
+    const primaryValue = getPrimaryValue(selectedValue);
+
+    if (primaryValue && deviceData[primaryValue] !== undefined) {
       // If a specific value is selected and exists in device data, use it
-      displayValue = deviceData[selectedValue];
-      displayText = `${selectedValue.toUpperCase()}:\n\n    ${displayValue}`;
-      displayLabel = `${selectedValue.toUpperCase()}:`; // Extract label only
-      displayValueOnly = displayValue; // Store value only
-    } else if (selectedValue === "temperature" && temperature !== undefined) {
+      displayValue = deviceData[primaryValue];
+      const formattedLabel = formatLabel(primaryValue);
+      displayText = `${formattedLabel}\n\n    ${displayValue}`;
+      displayLabel = formattedLabel;
+      displayValueOnly = displayValue;
+    } else if (primaryValue === "temperature" && temperature !== undefined) {
       // If temperature is specifically selected, use the temperature property
       displayValue = temperature;
       displayText = `TEMPERATURE:\n\n   ${displayValue}`;
-      displayLabel = "TEMPERATURE:"; // Set label only
-      displayValueOnly = displayValue; // Store value only
+      displayLabel = "TEMPERATURE:";
+      displayValueOnly = displayValue;
     } else {
       // Default fallback
       displayValue = temperature;
       displayText = `TEMPERATURE:\n\n   ${displayValue}`;
-      displayLabel = "TEMPERATURE:"; // Set label only
-      displayValueOnly = displayValue; // Store value only
+      displayLabel = "TEMPERATURE:";
+      displayValueOnly = displayValue;
     }
 
-    // Format the display value (you can customize this formatting)
-    let formattedValueOnly = displayValueOnly; // Formatted value only
+    // Format the display value
+    let formattedValueOnly = displayValueOnly;
     if (typeof displayValueOnly === "number") {
       formattedValueOnly = displayValueOnly.toFixed(1);
     }
 
     // Add unit if it's temperature
-    if (selectedValue === "temperature") {
+    if (primaryValue === "temperature") {
       formattedValueOnly += "°C";
     }
 
@@ -598,8 +617,8 @@ class CoolingPlate extends joint.dia.Element {
     this.attr("tempLevelDisplayLable", {
       x: 145 * scaleX,
       y: 150 * scaleY,
-      text: displayLabel, // Show only the label (e.g., "TEMPERATURE:")
-      fontSize: 30 * minScale, // Match the font size
+      text: displayLabel,
+      fontSize: 30 * minScale,
       fontFamily: "Arial",
       fill: "#333",
       fontWeight: "bold",
@@ -609,7 +628,7 @@ class CoolingPlate extends joint.dia.Element {
     this.attr("controlPanelTempText", {
       x: 230 * scaleX,
       y: 190 * scaleY,
-      text: formattedValueOnly, // Show only the formatted value with unit
+      text: formattedValueOnly,
       fontSize: 40 * minScale,
       fontFamily: "Arial",
       fill: power ? "#078C00" : "#333",
