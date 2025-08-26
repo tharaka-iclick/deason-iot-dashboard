@@ -808,7 +808,7 @@ const HeatPumpView = joint.dia.ElementView.extend({
   togglePower() {
     const { model } = this;
     const power = model.power;
-    console.log("togglePower called with power:", power); // Debug
+    console.log("togglePower called with power:", power);
     console.log("HeatPump togglePower called with power:", power);
     console.log("Model attributes:", model.attributes);
 
@@ -817,7 +817,7 @@ const HeatPumpView = joint.dia.ElementView.extend({
       if (anim) {
         anim.playbackRate = power;
         anim.play();
-        console.log("Animation playing with playbackRate:", power); // Debug
+        console.log("Animation playing with playbackRate:", power);
       } else {
         console.error("No animation available");
       }
@@ -1009,6 +1009,7 @@ const DashboardEditor = () => {
   const [animationSpeed, setAnimationSpeed] = useState(1);
 
   const [selectedElement, setSelectedElement] = useState(null);
+  const [selectedElementType, setSelectedElementType] = useState(null);
   const [elements, setElements] = useState({});
 
   const [heightScale, setHeightScale] = useState(100); // Add this state
@@ -1904,6 +1905,8 @@ const DashboardEditor = () => {
       }
 
       setSelectedElement(element.id);
+      setSelectedElementType(element?.attributes?.type);
+      console.log("setSelectedElement01", element?.attributes?.type);
 
       const cellEUI = cell.prop("custom/deviceEUI");
       const cellDeviceID = cell.prop("custom/deviceID");
@@ -2309,62 +2312,62 @@ const DashboardEditor = () => {
           color: "#ffffff",
         },
       },
-      {
-        type: "custom.TemplateImage",
-        svg: MotorPumpSVG,
-        size: { width: 80, height: 60 },
-        cloneSize: { width: 200, height: 200 },
-        attrs: {},
-      },
-      {
-        type: "custom.TemplateImage",
-        svg: HeatPumpSVG,
-        size: { width: 80, height: 60 },
-        cloneSize: { width: 200, height: 200 },
-        attrs: {},
-      },
-      {
-        type: "custom.TemplateImage",
-        svg: VatAgitator,
-        size: { width: 80, height: 60 },
-        cloneSize: { width: 200, height: 250 },
-        attrs: {},
-      },
-      {
-        type: "custom.TemplateImage",
-        svg: Chille,
-        size: { width: 80, height: 60 },
-        cloneSize: { width: 250, height: 200 },
-        attrs: {},
-      },
       // {
       //   type: "custom.TemplateImage",
-      //   svg: IceBank,
+      //   svg: MotorPumpSVG,
+      //   size: { width: 80, height: 60 },
+      //   cloneSize: { width: 200, height: 200 },
+      //   attrs: {},
+      // },
+      // {
+      //   type: "custom.TemplateImage",
+      //   svg: HeatPumpSVG,
+      //   size: { width: 80, height: 60 },
+      //   cloneSize: { width: 200, height: 200 },
+      //   attrs: {},
+      // },
+      // {
+      //   type: "custom.TemplateImage",
+      //   svg: VatAgitator,
+      //   size: { width: 80, height: 60 },
+      //   cloneSize: { width: 200, height: 250 },
+      //   attrs: {},
+      // },
+      // {
+      //   type: "custom.TemplateImage",
+      //   svg: Chille,
       //   size: { width: 80, height: 60 },
       //   cloneSize: { width: 250, height: 200 },
       //   attrs: {},
       // },
-      {
-        type: "custom.TemplateImage",
-        svg: ACFan,
-        size: { width: 80, height: 60 },
-        cloneSize: { width: 250, height: 200 },
-        attrs: {},
-      },
-      {
-        type: "custom.TemplateImage",
-        svg: VatAgitatorMixser,
-        size: { width: 80, height: 60 },
-        cloneSize: { width: 80, height: 120 },
-        attrs: {},
-      },
-      {
-        type: "custom.TemplateImage",
-        svg: VatAgitatorLevel,
-        size: { width: 80, height: 60 },
-        cloneSize: { width: 80, height: 120 },
-        attrs: {},
-      },
+      // // {
+      // //   type: "custom.TemplateImage",
+      // //   svg: IceBank,
+      // //   size: { width: 80, height: 60 },
+      // //   cloneSize: { width: 250, height: 200 },
+      // //   attrs: {},
+      // // },
+      // {
+      //   type: "custom.TemplateImage",
+      //   svg: ACFan,
+      //   size: { width: 80, height: 60 },
+      //   cloneSize: { width: 250, height: 200 },
+      //   attrs: {},
+      // },
+      // {
+      //   type: "custom.TemplateImage",
+      //   svg: VatAgitatorMixser,
+      //   size: { width: 80, height: 60 },
+      //   cloneSize: { width: 80, height: 120 },
+      //   attrs: {},
+      // },
+      // {
+      //   type: "custom.TemplateImage",
+      //   svg: VatAgitatorLevel,
+      //   size: { width: 80, height: 60 },
+      //   cloneSize: { width: 80, height: 120 },
+      //   attrs: {},
+      // },
     ];
 
     const stencilPorts = [
@@ -2864,7 +2867,11 @@ const DashboardEditor = () => {
       };
     });
 
-    stencil.load({ elements: stencilElements, ports: stencilPorts });
+    stencil.load({
+      elements: stencilElements,
+
+      // ports: stencilPorts
+    });
 
     stencil.on({
       "element:dragstart": (cloneView, evt) => {
@@ -3772,6 +3779,8 @@ const DashboardEditor = () => {
 
   const elementData = elements[selectedElement];
 
+  console.log("elementData in production:", selectedElement);
+
   const handlePowerChange = (id, newValue) => {
     console.log(
       "[React] handlePowerChange called for id:",
@@ -3790,6 +3799,7 @@ const DashboardEditor = () => {
     const defaults = {};
     const type = elements[id].type;
     console.log("[React] toggleRunning called for id:", id);
+    console.log("[React] elements[id].type:", type);
     const current = elements[id]?.isRunning || false;
     const newPower = current ? 0 : 1;
     console.log("[React] Current isRunning:", current, "New power:", newPower);
@@ -4223,9 +4233,11 @@ const DashboardEditor = () => {
               width: "250px",
               borderLeft: "1px solid #ccc",
               backgroundColor: "#fff",
-              overflow: "hidden",
+              // overflow: "hidden",
               display: "flex",
               flexDirection: "column",
+              // flex: 1,
+              overflow: "auto",
             }}
           >
             <Typography
@@ -4424,7 +4436,7 @@ const DashboardEditor = () => {
                     </RadioGroup>
                   </FormControl>
                 )} */}
-                {elementData.type === "HeatPump" && (
+                {selectedElementType === "HeatPump" && (
                   <Card elevation={3}>
                     <CardContent>
                       <Stack
@@ -4504,7 +4516,7 @@ const DashboardEditor = () => {
                   </Card>
                 )}
 
-                {elementData.type === "CoolingPlate" && (
+                {selectedElementType === "CoolingPlate" && (
                   <Card elevation={3}>
                     <CardContent>
                       <Stack
@@ -4548,7 +4560,7 @@ const DashboardEditor = () => {
                   </Card>
                 )}
 
-                {elementData.type === "PlantChiller" && (
+                {selectedElementType === "PlantChiller" && (
                   <Card elevation={3}>
                     <CardContent>
                       <Stack
@@ -4592,7 +4604,7 @@ const DashboardEditor = () => {
                   </Card>
                 )}
 
-                {elementData.type === "IceBank" && (
+                {selectedElementType === "IceBank" && (
                   <Card elevation={3}>
                     <CardContent>
                       <Stack
@@ -4602,9 +4614,7 @@ const DashboardEditor = () => {
                         mb={2}
                       >
                         <Settings color="primary" />
-                        <Typography variant="h6">
-                          Plant Chiller Controls
-                        </Typography>
+                        <Typography variant="h6">Ice Bank Controls</Typography>
                       </Stack>
                       <div className="text-xs mt-2">
                         Status: {elementData.power ? "ON" : "OFF"}
@@ -4636,7 +4646,7 @@ const DashboardEditor = () => {
                   </Card>
                 )}
 
-                {elementData.type === "VatWithAgitator" && (
+                {selectedElementType === "VatWithAgitator" && (
                   <Card elevation={3}>
                     <CardContent>
                       <Stack
