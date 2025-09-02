@@ -1128,7 +1128,7 @@ const DashboardEditor = () => {
             let displayText;
             try {
               const modelName =
-                formatKey(selectedValue.length > 0 ? selectedValue[0] : "") ||
+                formatKey(selectedValue.length > 0 ? selectedValue[0] : "") ||  
                 "Device";
               if (typeof value === "number") {
                 // Format numbers with 2 decimal places
