@@ -32,12 +32,16 @@ import {
   Refresh,
   Opacity,
   Speed,
+  ZoomIn,
+  ZoomOut,
+  CenterFocusStrong,
 } from "@mui/icons-material";
 
 import { ChevronDown, Undo, Redo, ArrowLeft, Save } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { SaveDialog } from "../../../../shared/components/ui";
 import { useSelector } from "react-redux";
+import ResizableCanvas from "../components/ResizableCanvas";
 import {
   Pipe01,
   // PipeView01,
@@ -1090,6 +1094,82 @@ const DashboardEditor = () => {
   const handleAnimationTypeChange = (event) => {
     setAnimationType(event.target.value);
   };
+
+  const handleCanvasResize = (newDimensions) => {
+    setCanvasDimensions(newDimensions);
+
+    // Update paper dimensions when canvas is resized
+    if (paperRef.current) {
+      paperRef.current.setDimensions(newDimensions.width, newDimensions.height);
+
+      // Also update the paper container dimensions
+      if (paperContainerRef.current) {
+        paperContainerRef.current.style.width = `${newDimensions.width}px`;
+        paperContainerRef.current.style.height = `${newDimensions.height}px`;
+      }
+    }
+  };
+
+  // Add pan and zoom control functions
+  const handleResetZoom = () => {
+    const resetTransform = { x: 0, y: 0, scale: 1 };
+    setCanvasTransform(resetTransform);
+    if (paperRef.current) {
+      // Reset the paper's transformation matrix
+      paperRef.current.matrix({ a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 });
+    }
+  };
+
+  const handleZoomIn = () => {
+    const currentScale = canvasTransform.scale;
+    const newScale = Math.min(3, currentScale * 1.2);
+    const newTransform = { ...canvasTransform, scale: newScale };
+    setCanvasTransform(newTransform);
+    if (paperRef.current) {
+      const currentMatrix = paperRef.current.matrix();
+      const centerX = paperRef.current.options.width / 2;
+      const centerY = paperRef.current.options.height / 2;
+      
+      // Calculate new translation to keep center point stable
+      const scaleRatio = newScale / currentScale;
+      const newTx = centerX - (centerX - currentMatrix.e) * scaleRatio;
+      const newTy = centerY - (centerY - currentMatrix.f) * scaleRatio;
+      
+      paperRef.current.matrix({ a: newScale, b: 0, c: 0, d: newScale, e: newTx, f: newTy });
+    }
+  };
+
+  const handleZoomOut = () => {
+    const currentScale = canvasTransform.scale;
+    const newScale = Math.max(0.1, currentScale * 0.8);
+    const newTransform = { ...canvasTransform, scale: newScale };
+    setCanvasTransform(newTransform);
+    if (paperRef.current) {
+      const currentMatrix = paperRef.current.matrix();
+      const centerX = paperRef.current.options.width / 2;
+      const centerY = paperRef.current.options.height / 2;
+      
+      // Calculate new translation to keep center point stable
+      const scaleRatio = newScale / currentScale;
+      const newTx = centerX - (centerX - currentMatrix.e) * scaleRatio;
+      const newTy = centerY - (centerY - currentMatrix.f) * scaleRatio;
+      
+      paperRef.current.matrix({ a: newScale, b: 0, c: 0, d: newScale, e: newTx, f: newTy });
+    }
+  };
+
+  const handleFitToScreen = () => {
+    if (paperRef.current) {
+      paperRef.current.scaleContentToFit({ padding: 20 });
+      // Update transform state to reflect the new scale
+      const currentMatrix = paperRef.current.matrix();
+      setCanvasTransform({ 
+        x: currentMatrix.e, 
+        y: currentMatrix.f, 
+        scale: currentMatrix.a 
+      });
+    }
+  };
   const formatKey = (key) => {
     return key
       .split("_")
@@ -1766,6 +1846,10 @@ const DashboardEditor = () => {
 
   const [isLoadingEUIs, setIsLoadingEUIs] = useState(true);
   const [isLoadingDeviceIDs, setIsLoadingDeviceIDs] = useState(false);
+  const [canvasDimensions, setCanvasDimensions] = useState({ width: 800, height: 600 });
+  const [isPanning, setIsPanning] = useState(false);
+  const [panStartPosition, setPanStartPosition] = useState({ x: 0, y: 0 });
+  const [canvasTransform, setCanvasTransform] = useState({ x: 0, y: 0, scale: 1 });
 
   useEffect(() => {
     const { dia, shapes, mvc, ui, highlighters, util } = joint;
@@ -1805,13 +1889,14 @@ const DashboardEditor = () => {
     const paper = new dia.Paper({
       model: graph,
       cellViewNamespace: namespace,
-      width: "100%",
-      height: "100%",
+      width: canvasDimensions.width,
+      height: canvasDimensions.height,
       gridSize: 20,
       drawGrid: { name: "mesh" },
       async: true,
       sorting: dia.Paper.sorting.APPROX,
       background: { color: "#F3F7F6" },
+      interactive: true,
       defaultLink: () => {
         const linkIdNumber = ++linkIdCounter;
         return new Pipe();
@@ -1981,6 +2066,193 @@ const DashboardEditor = () => {
     paper.on("blank:pointerdown cell:pointerdown", () => {
       paper.removeTools();
     });
+
+    // Add panning functionality
+    let isPanningLocal = false;
+    let panStartLocal = { x: 0, y: 0 };
+    let currentTransform = { x: 0, y: 0, scale: 1 };
+    let isDraggingElement = false;
+
+    // Enhanced panning - works with left mouse button on blank areas
+    paper.on("blank:pointerdown", (evt) => {
+      // Start panning with left mouse button on blank areas, or middle mouse button, or ctrl key
+      if (evt.originalEvent.button === 0 || evt.originalEvent.button === 1 || evt.originalEvent.ctrlKey) {
+        isPanningLocal = true;
+        panStartLocal = { 
+          x: evt.originalEvent.clientX, 
+          y: evt.originalEvent.clientY 
+        };
+        paper.el.style.cursor = 'grabbing';
+        evt.preventDefault();
+      }
+    });
+
+    // Prevent panning when clicking on elements
+    paper.on("element:pointerdown", (evt) => {
+      isDraggingElement = true;
+    });
+
+    paper.on("element:pointerup", (evt) => {
+      isDraggingElement = false;
+    });
+
+    const handleMouseMove = (evt) => {
+      if (isPanningLocal && !isDraggingElement) {
+        const deltaX = evt.clientX - panStartLocal.x;
+        const deltaY = evt.clientY - panStartLocal.y;
+        
+        // Get current matrix and apply translation
+        const currentMatrix = paper.matrix();
+        const newMatrix = {
+          ...currentMatrix,
+          e: currentMatrix.e + deltaX,
+          f: currentMatrix.f + deltaY
+        };
+        
+        paper.matrix(newMatrix);
+        
+        currentTransform.x = newMatrix.e;
+        currentTransform.y = newMatrix.f;
+        
+        panStartLocal = { x: evt.clientX, y: evt.clientY };
+        setCanvasTransform({ ...currentTransform });
+        evt.preventDefault();
+      }
+    };
+
+    const handleMouseUp = (evt) => {
+      if (isPanningLocal) {
+        isPanningLocal = false;
+        paper.el.style.cursor = 'default';
+        evt.preventDefault();
+      }
+    };
+
+    // Add event listeners to document for global mouse events
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    // Add zoom functionality with mouse wheel
+    paper.el.addEventListener('wheel', (evt) => {
+      evt.preventDefault();
+      const delta = Math.max(-1, Math.min(1, (evt.deltaY || -evt.detail)));
+      const scaleFactor = delta > 0 ? 0.9 : 1.1;
+      const newScale = Math.max(0.1, Math.min(3, currentTransform.scale * scaleFactor));
+      
+      const rect = paper.el.getBoundingClientRect();
+      const mouseX = evt.clientX - rect.left;
+      const mouseY = evt.clientY - rect.top;
+      
+      // Get current scale and calculate scale ratio
+      const scaleRatio = newScale / currentTransform.scale;
+      
+      // Calculate the translation needed to zoom towards mouse position
+      const currentMatrix = paper.matrix();
+      const newTx = mouseX - (mouseX - currentMatrix.e) * scaleRatio;
+      const newTy = mouseY - (mouseY - currentMatrix.f) * scaleRatio;
+      
+      // Apply the new transformation matrix directly
+      paper.matrix({ a: newScale, b: 0, c: 0, d: newScale, e: newTx, f: newTy });
+      
+      currentTransform = { x: newTx, y: newTy, scale: newScale };
+      setCanvasTransform({ ...currentTransform });
+    });
+
+    // Add visual feedback for panning
+    paper.on("blank:pointerenter", (evt) => {
+      if (!isPanningLocal) {
+        paper.el.style.cursor = 'grab';
+      }
+    });
+
+    paper.on("blank:pointerleave", (evt) => {
+      if (!isPanningLocal) {
+        paper.el.style.cursor = 'default';
+      }
+    });
+
+    // Add visual feedback during panning
+    paper.on("blank:pointerdown", (evt) => {
+      if (evt.originalEvent.button === 0 || evt.originalEvent.button === 1 || evt.originalEvent.ctrlKey) {
+        paper.el.style.transition = 'none';
+        paper.el.style.boxShadow = '0 0 20px rgba(0,0,0,0.1)';
+      }
+    });
+
+    paper.on("blank:pointerup", (evt) => {
+      paper.el.style.transition = 'box-shadow 0.2s ease';
+      paper.el.style.boxShadow = 'none';
+    });
+
+    // Double-click to reset canvas position
+    paper.on("blank:dblclick", (evt) => {
+      evt.preventDefault();
+      // Reset to center with scale 1
+      const centerX = paper.options.width / 2;
+      const centerY = paper.options.height / 2;
+      paper.matrix({ a: 1, b: 0, c: 0, d: 1, e: centerX, f: centerY });
+      currentTransform = { x: centerX, y: centerY, scale: 1 };
+      setCanvasTransform({ ...currentTransform });
+    });
+
+
+
+    // Cleanup function to remove event listeners
+    const cleanup = () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+
+    // Store the keydown handler reference for cleanup
+    const handleKeyDown = (evt) => {
+      if (evt.target.tagName === 'INPUT' || evt.target.tagName === 'TEXTAREA') return;
+      
+      const panStep = 50;
+      const currentMatrix = paper.matrix();
+      
+      switch(evt.key) {
+        case 'ArrowUp':
+          evt.preventDefault();
+          paper.matrix({ ...currentMatrix, f: currentMatrix.f - panStep });
+          currentTransform.y = currentMatrix.f - panStep;
+          setCanvasTransform({ ...currentTransform });
+          break;
+        case 'ArrowDown':
+          evt.preventDefault();
+          paper.matrix({ ...currentMatrix, f: currentMatrix.f + panStep });
+          currentTransform.y = currentMatrix.f + panStep;
+          setCanvasTransform({ ...currentTransform });
+          break;
+        case 'ArrowLeft':
+          evt.preventDefault();
+          paper.matrix({ ...currentMatrix, e: currentMatrix.e - panStep });
+          currentTransform.x = currentMatrix.e - panStep;
+          setCanvasTransform({ ...currentTransform });
+          break;
+        case 'ArrowRight':
+          evt.preventDefault();
+          paper.matrix({ ...currentMatrix, e: currentMatrix.e + panStep });
+          currentTransform.x = currentMatrix.e + panStep;
+          setCanvasTransform({ ...currentTransform });
+          break;
+        case 'Home':
+          evt.preventDefault();
+          // Reset to center
+          const centerX = paper.options.width / 2;
+          const centerY = paper.options.height / 2;
+          paper.matrix({ a: 1, b: 0, c: 0, d: 1, e: centerX, f: centerY });
+          currentTransform = { x: centerX, y: centerY, scale: 1 };
+          setCanvasTransform({ ...currentTransform });
+          break;
+      }
+    };
+
+    // Add keyboard event listener
+    document.addEventListener('keydown', handleKeyDown);
+
+    // Store cleanup function for later use
+    paper._cleanup = cleanup;
 
     paper.on("element:pointerclick", (elementView) => {
       elementView.addTools(
@@ -3446,6 +3718,12 @@ const DashboardEditor = () => {
       deviceSubscriptions.current.forEach((unsubscribe) => unsubscribe());
       deviceSubscriptions.current.clear();
       cellDeviceData.current.clear();
+      
+      // Cleanup event listeners for panning
+      if (paper._cleanup) {
+        paper._cleanup();
+      }
+      
       paper.remove();
       stencil.remove();
     };
@@ -4144,6 +4422,22 @@ const DashboardEditor = () => {
             <IconButton color="inherit" onClick={handleRedo}>
               <Redo size={20} />
             </IconButton>
+            
+            {/* Zoom and Pan Controls */}
+            <Box sx={{ ml: 2, mr: 1, borderLeft: "1px solid rgba(255,255,255,0.3)", pl: 2 }}>
+              <IconButton color="inherit" onClick={handleZoomIn} title="Zoom In">
+                <ZoomIn size={20} />
+              </IconButton>
+              <IconButton color="inherit" onClick={handleZoomOut} title="Zoom Out">
+                <ZoomOut size={20} />
+              </IconButton>
+              <IconButton color="inherit" onClick={handleResetZoom} title="Reset Zoom">
+                <CenterFocusStrong size={20} />
+              </IconButton>
+              <IconButton color="inherit" onClick={handleFitToScreen} title="Fit to Screen">
+                <Refresh size={20} />
+              </IconButton>
+            </Box>
           </Toolbar>
         </AppBar>
 
@@ -4184,42 +4478,107 @@ const DashboardEditor = () => {
             />
           </Box>
 
-          <Box
-            sx={{
-              flex: 1,
-              backgroundColor: "#f9f9f9",
-              position: "relative",
-              overflow: "hidden",
-            }}
-          >
-            <Typography
-              variant="subtitle1"
-              sx={{
-                position: "absolute",
-                top: 8,
-                left: 16,
-                zIndex: 1,
-                backgroundColor: "rgba(255,255,255,0.9)",
-                padding: "4px 8px",
-                borderRadius: "4px",
-                fontSize: "12px",
-                color: "#666",
-              }}
-            ></Typography>
+          <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: 2 }}>
+            <ResizableCanvas
+              minWidth={600}
+              minHeight={400}
+              initialWidth={canvasDimensions.width}
+              initialHeight={canvasDimensions.height}
+              onResize={handleCanvasResize}
+              title="Dashboard Canvas"
+            >
             <Box
-              ref={paperContainerRef}
               sx={{
+                flex: 1,
+                backgroundColor: "#f9f9f9",
+                position: "relative",
+                overflow: "hidden",
                 width: "100%",
                 height: "100%",
-                "& .joint-paper": {
-                  border: "none",
-                },
-                "& .joint-paper svg": {
+              }}
+            >
+              <Typography
+                variant="subtitle1"
+                sx={{
+                  position: "absolute",
+                  top: 8,
+                  left: 16,
+                  zIndex: 1,
+                  backgroundColor: "rgba(255,255,255,0.9)",
+                  padding: "4px 8px",
+                  borderRadius: "4px",
+                  fontSize: "12px",
+                  color: "#666",
+                }}
+              >
+                Pan: Left Click + Drag | Zoom: Mouse Wheel
+              </Typography>
+              <Typography
+                variant="subtitle1"
+                sx={{
+                  position: "absolute",
+                  top: 8,
+                  right: 16,
+                  zIndex: 1,
+                  backgroundColor: "rgba(255,255,255,0.9)",
+                  padding: "4px 8px",
+                  borderRadius: "4px",
+                  fontSize: "12px",
+                  color: "#666",
+                }}
+              >
+                Zoom: {Math.round(canvasTransform.scale * 100)}%
+              </Typography>
+              
+              {/* Enhanced Navigation Help */}
+              <Box
+                sx={{
+                  position: "absolute",
+                  bottom: 8,
+                  left: 16,
+                  zIndex: 1,
+                  backgroundColor: "rgba(0,0,0,0.8)",
+                  color: "white",
+                  padding: "8px 12px",
+                  borderRadius: "6px",
+                  fontSize: "11px",
+                  maxWidth: "280px",
+                  backdropFilter: "blur(10px)",
+                  border: "1px solid rgba(255,255,255,0.2)",
+                  opacity: 0.9,
+                  transition: "opacity 0.3s ease",
+                  "&:hover": {
+                    opacity: 1
+                  }
+                }}
+              >
+                <Box sx={{ fontWeight: "bold", mb: 1, fontSize: "12px" }}>Navigation Help:</Box>
+                <Box sx={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                  <Box>🖱️ Left Click + Drag: Pan canvas</Box>
+                  <Box>🔍 Mouse Wheel: Zoom in/out</Box>
+                  <Box>⌨️ Arrow Keys: Move canvas</Box>
+                  <Box>🏠 Home Key: Reset to center</Box>
+                  <Box>🖱️ Double-click: Reset view</Box>
+                </Box>
+              </Box>
+              <Box
+                ref={paperContainerRef}
+                sx={{
                   width: "100%",
                   height: "100%",
-                },
-              }}
-            />
+                  border: "1px solid rgba(0,0,0,0.1)",
+                  borderRadius: "4px",
+                  "& .joint-paper": {
+                    border: "none",
+                  },
+                  "& .joint-paper svg": {
+                    width: "100%",
+                    height: "100%",
+                  },
+                }}
+              />
+            </Box>
+            </ResizableCanvas>
           </Box>
 
           <Box
